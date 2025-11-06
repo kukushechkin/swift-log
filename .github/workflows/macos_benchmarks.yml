@@ -203,7 +203,7 @@ on:
 
 jobs:
   construct-matrix-benchmark:
-    name: Construct Darwin matrix
+    name: Construct Darwin matrix for benchmarks
     runs-on: ubuntu-latest
     outputs:
       darwin-matrix: '${{ steps.generate-matrix.outputs.darwin-matrix }}'
@@ -389,7 +389,7 @@ jobs:
           MATRIX_MACOS_LATEST_BETA_SETUP_COMMAND: ${{ inputs.xcode_latest_beta_setup_command }}
 
   darwin-job-benchmark:
-    name: ${{ matrix.config.name }}
+    name: ${{ matrix.config.name }} benchmark
     needs: construct-matrix-benchmark
     runs-on: [self-hosted, macos, "${{ matrix.config.os }}", "${{ matrix.config.arch }}", "${{ matrix.config.pool }}"]
     timeout-minutes: 30
@@ -411,21 +411,6 @@ jobs:
       - name: Setup command
         if: ${{ matrix.config.setup_command != '' }}
         run: bash -c "${{ matrix.config.setup_command }}"
-      # - name: Swift build
-      #   run: |
-      #     if [ -n "${{ matrix.config.build_arguments_override }}" ]; then
-      #       swift build ${{ matrix.config.build_arguments_override }}
-      #     else
-      #       swift build --build-tests
-      #     fi
-      # - name: Swift test
-      #   if: 'inputs.swift_test_enabled'
-      #   run: |
-      #     if [ -n "${{ matrix.config.test_arguments_override }}" ]; then
-      #       swift test ${{ matrix.config.test_arguments_override }}
-      #     else
-      #       swift test
-      #     fi
       - name: Swift package-benchmark
         if: 'inputs.swift_package_benchmark_enabled'
         run: |

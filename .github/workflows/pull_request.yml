@@ -41,7 +41,7 @@ jobs:
   #     benchmark_package_path: "Benchmarks"
 
   macos-benchmarks:
-    name: macOS tests
+    name: macOS benchmarks
     uses: ./.github/workflows/macos_benchmarks.yml
     with:
       runner_pool: general
