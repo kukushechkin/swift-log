@@ -154,6 +154,9 @@ on:
         type: string
         description: "Path to the directory containing the benchmarking package. Defaults to ."
         default: "."
+      swift_package_arguments:
+        type: string
+        description: "Arguments to the switch package command invocation e.g. `--disable-sandbox`"
       swift_test_enabled:
         type: boolean
         description: "Boolean to enable test execution with `swift test`. Defaults to true."
