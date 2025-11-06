@@ -1,4 +1,4 @@
-name: macOS tests
+name: macOS benchmarks
 
 permissions:
   contents: read
@@ -150,14 +150,6 @@ on:
         type: boolean
         description: "Boolean to enable test execution with `swift test`. Defaults to true."
         default: true
-      swift_package_benchmark_enabled:
-        type: boolean
-        description: "Boolean to enable package-benchmark execution with `swift package benchmark`. Defaults to false."
-        default: false
-      benchmark_package_path:
-        type: string
-        description: "Path to the directory containing the benchmarking package. Defaults to ."
-        default: "."
       macos_xcode_build_enabled:
         type: boolean
         description: "Boolean to enable the Xcode build targeting macOS. Defaults to true."
@@ -210,7 +202,7 @@ on:
         default: "{}"
 
 jobs:
-  construct-matrix:
+  construct-matrix-benchmark:
     name: Construct Darwin matrix
     runs-on: ubuntu-latest
     outputs:
@@ -396,7 +388,7 @@ jobs:
           MATRIX_MACOS_LATEST_BETA_TEST_ARGUMENTS_OVERRIDE: ${{ inputs.xcode_latest_beta_test_arguments_override }}
           MATRIX_MACOS_LATEST_BETA_SETUP_COMMAND: ${{ inputs.xcode_latest_beta_setup_command }}
 
-  darwin-job:
+  darwin-job-benchmark:
     name: ${{ matrix.config.name }}
     needs: construct-matrix
     runs-on: [self-hosted, macos, "${{ matrix.config.os }}", "${{ matrix.config.arch }}", "${{ matrix.config.pool }}"]
