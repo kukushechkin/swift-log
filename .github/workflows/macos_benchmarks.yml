@@ -146,6 +146,14 @@ on:
       build_scheme:
         type: string
         description: "The build scheme used in the Xcode builds."
+      swift_package_benchmark_enabled:
+        type: boolean
+        description: "Boolean to enable package-benchmark execution with `swift package benchmark`. Defaults to false."
+        default: false
+      benchmark_package_path:
+        type: string
+        description: "Path to the directory containing the benchmarking package. Defaults to ."
+        default: "."
       swift_test_enabled:
         type: boolean
         description: "Boolean to enable test execution with `swift test`. Defaults to true."
