@@ -390,12 +390,12 @@ jobs:
 
   darwin-job-benchmark:
     name: ${{ matrix.config.name }}
-    needs: construct-matrix
+    needs: construct-matrix-benchmark
     runs-on: [self-hosted, macos, "${{ matrix.config.os }}", "${{ matrix.config.arch }}", "${{ matrix.config.pool }}"]
     timeout-minutes: 30
     strategy:
       fail-fast: false
-      matrix: ${{ fromJson(needs.construct-matrix.outputs.darwin-matrix) }}
+      matrix: ${{ fromJson(needs.construct-matrix-benchmark.outputs.darwin-matrix) }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
