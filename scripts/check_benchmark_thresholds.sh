@@ -20,12 +20,12 @@ error() { printf -- "** ERROR: %s\n" "$*" >&2; }
 fatal() { error "$@"; exit 1; }
 
 # Parameter environment variables
-if [ -z "$SWIFT_VERSION" ]; then
-  fatal "SWIFT_VERSION must be specified."
+if [ -z "$XCODE_VERSION" ]; then
+  fatal "XCODE_VERSION must be specified."
 fi
 
 benchmark_package_path="${BENCHMARK_PACKAGE_PATH:-"."}"
-swift_version="${SWIFT_VERSION:-""}"
+xcode_version="${XCODE_VERSION:-""}"
 
 # Build swift package command with optional arguments
 # This avoids the "unbound variable" error when $@ is empty with set -u
@@ -36,7 +36,7 @@ else
 fi
 
 # Check thresholds
-eval "$swift_package_cmd" benchmark thresholds check --format metricP90AbsoluteThresholds --path "${benchmark_package_path}/Thresholds/${swift_version}/"
+eval "$swift_package_cmd" benchmark thresholds check --format metricP90AbsoluteThresholds --path "${benchmark_package_path}/Thresholds/Xcode_${xcode_version}/"
 rc="$?"
 
 # Benchmarks are unchanged, nothing to recalculate
@@ -46,6 +46,6 @@ fi
 
 log "Recalculating thresholds..."
 
-eval "$swift_package_cmd" benchmark thresholds update --format metricP90AbsoluteThresholds --path "${benchmark_package_path}/Thresholds/${swift_version}/"
+eval "$swift_package_cmd" benchmark thresholds update --format metricP90AbsoluteThresholds --path "${benchmark_package_path}/Thresholds/Xcode_${xcode_version}/" --allow-writing-to-package-directory
 echo "=== BEGIN DIFF ==="  # use echo, not log for clean output to be scraped
 git diff --exit-code HEAD

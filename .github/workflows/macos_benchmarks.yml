@@ -426,7 +426,7 @@ jobs:
       - name: Swift package-benchmark
         if: 'inputs.swift_package_benchmark_enabled'
         run: |
-          SWIFT_VERSION=6.2 \
+            XCODE_VERSION=$XCODE_VERSION \
             BENCHMARK_DISABLE_JEMALLOC=true \
             BENCHMARK_PACKAGE_PATH=${{ inputs.benchmark_package_path }} \
             bash scripts/check_benchmark_thresholds.sh ${{ inputs.swift_package_arguments }}
