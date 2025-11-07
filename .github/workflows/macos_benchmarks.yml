@@ -157,6 +157,7 @@ on:
       swift_package_arguments:
         type: string
         description: "Arguments to the switch package command invocation e.g. `--disable-sandbox`"
+        default: ""
       swift_test_enabled:
         type: boolean
         description: "Boolean to enable test execution with `swift test`. Defaults to true."
@@ -425,7 +426,12 @@ jobs:
       - name: Swift package-benchmark
         if: 'inputs.swift_package_benchmark_enabled'
         run: |
-          curl -s https://raw.githubusercontent.com/apple/swift-nio/main/scripts/check_benchmark_thresholds.sh | SWIFT_VERSION=6.2 BENCHMARK_DISABLE_JEMALLOC=true BENCHMARK_PACKAGE_PATH=${{ inputs.benchmark_package_path }} bash -s -- ${{ inputs.swift_package_arguments }}
+          script_args=(${{ inputs.swift_package_arguments }})
+          curl -s https://raw.githubusercontent.com/apple/swift-nio/main/scripts/check_benchmark_thresholds.sh | \
+            SWIFT_VERSION=6.2 \
+            BENCHMARK_DISABLE_JEMALLOC=true \
+            BENCHMARK_PACKAGE_PATH=${{ inputs.benchmark_package_path }} \
+            bash -s -- ${script_args[@]+"${script_args[@]}"}
         # see `xcodebuild -list` for schemes, `simctl list` for destinations
       - name: macOS build
         if: '!cancelled() && inputs.macos_xcode_build_enabled'
