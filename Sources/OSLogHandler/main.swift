@@ -21,6 +21,6 @@ if #available(macOS 11, *) {
     logger.handler = myOSLogHandler
     
     logger.debug("this is a debug message", metadata: [
-        "foo": Logger.MetadataValue.string("42")
+        "foo": Logger.MetadataValue.string("42", .private)
     ])
 }
