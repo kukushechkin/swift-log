@@ -28,6 +28,10 @@ import WASILibc
 #error("Unsupported runtime")
 #endif
 
+public enum PrivacyLevel: Sendable, Equatable {
+    case `public`, `private`
+}
+
 /// A Logger emits log messages using methods that correspond to a log level.
 ///
 /// `Logger` is a value type with respect to the ``Logger/Level`` and the ``Metadata`` (as well as the immutable `label`
@@ -885,10 +889,10 @@ extension Logger {
         ///
         /// Because `MetadataValue` implements `ExpressibleByStringInterpolation`, and `ExpressibleByStringLiteral`,
         /// you don't need to type `.string(someType.description)` instead the string interpolation `"\(someType)"`.
-        case string(String)
+        case string(String, PrivacyLevel = .private)
 
         /// A metadata value that conforms to custom string convertible.
-        case stringConvertible(any CustomStringConvertible & Sendable)
+        case stringConvertible(any CustomStringConvertible & Sendable, PrivacyLevel = .private)
 
         /// A metadata value which is a dictionary keyed with strings and storing metadata values.
         ///
@@ -896,13 +900,13 @@ extension Logger {
         ///
         /// Because `MetadataValue` implements `ExpressibleByDictionaryLiteral`, you don't need to type
         /// `.dictionary(["foo": .string("bar \(buz)")])`, instead use the more natural `["foo": "bar \(buz)"]`.
-        case dictionary(Metadata)
+        case dictionary(Metadata, PrivacyLevel = .private)
 
         /// An array of metadata values.
         ///
         /// Because `MetadataValue` implements `ExpressibleByArrayLiteral`, you don't need to type
         /// `.array([.string("foo"), .string("bar \(buz)")])`, instead use the more natural `["foo", "bar \(buz)"]`.
-        case array([Metadata.Value])
+        case array([Metadata.Value], PrivacyLevel = .private)
     }
 
     /// The log level.
@@ -1038,14 +1042,14 @@ extension Logger.MetadataValue: Equatable {
     /// - Returns: Returns `true` if the metadata values are equivalent; otherwise `false`.
     public static func == (lhs: Logger.Metadata.Value, rhs: Logger.Metadata.Value) -> Bool {
         switch (lhs, rhs) {
-        case (.string(let lhs), .string(let rhs)):
-            return lhs == rhs
-        case (.stringConvertible(let lhs), .stringConvertible(let rhs)):
-            return lhs.description == rhs.description
-        case (.array(let lhs), .array(let rhs)):
-            return lhs == rhs
-        case (.dictionary(let lhs), .dictionary(let rhs)):
-            return lhs == rhs
+        case (.string(let lhs, let lhsPrivacyLevel), .string(let rhs, let rhsPrivacyLevel)):
+            return lhs == rhs && lhsPrivacyLevel == rhsPrivacyLevel
+        case (.stringConvertible(let lhs, let lshPrivacyLevel), .stringConvertible(let rhs, let rshPrivacyLevel)):
+            return lhs.description == rhs.description && lshPrivacyLevel == rshPrivacyLevel
+        case (.array(let lhs, let lshPrivacyLevel), .array(let rhs, let rshPrivacyLevel)):
+            return lhs == rhs && lshPrivacyLevel == rshPrivacyLevel
+        case (.dictionary(let lhs, let lhsPrivacyLevel), .dictionary(let rhs, let rhsPrivacyLevel)):
+            return lhs == rhs && lhsPrivacyLevel == rhsPrivacyLevel
         default:
             return false
         }
@@ -1709,13 +1713,14 @@ extension Logger.MetadataValue: CustomStringConvertible {
     /// A string representation of the metadata value.
     public var description: String {
         switch self {
-        case .dictionary(let dict):
+        // TODO: handle privacyLevel
+        case .dictionary(let dict, _):
             return dict.mapValues { $0.description }.description
-        case .array(let list):
+        case .array(let list, _):
             return list.map { $0.description }.description
-        case .string(let str):
+        case .string(let str, _):
             return str
-        case .stringConvertible(let repr):
+        case .stringConvertible(let repr, _):
             return repr.description
         }
     }

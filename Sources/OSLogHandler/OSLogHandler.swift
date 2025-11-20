@@ -32,46 +32,43 @@ extension OSLogInterpolation {
             }
             
             // TODO: this decision should be based on the `value` privacy label instead
-            var isPublic = false
             if key.starts(with: "public_") {
                 appendInterpolation(key, privacy: .public)
-                isPublic = true
             } else {
                 appendInterpolation(key, privacy: .private)
             }
             appendLiteral("=")
-            appendInterpolation((value, isPublic))
+            appendInterpolation(value)
         }
         appendLiteral("]")
     }
 
     /// Appends a metadata value with privacy control
     @inlinable
-    mutating func appendInterpolation(_ valueWithPrivacy: (Logging.Logger.Metadata.Value, Bool)) {
-        let (value, isPublic) = valueWithPrivacy
+    mutating func appendInterpolation(_ value: Logging.Logger.Metadata.Value) {
         switch value {
-        case .string(let str):
-            if isPublic {
+        case .string(let str, let privacyLevel):
+            if privacyLevel == .public {
                 appendInterpolation(str, privacy: .public)
             } else {
                 appendInterpolation(str, privacy: .private)
             }
-        case .stringConvertible(let convertible):
-            if isPublic {
+        case .stringConvertible(let convertible, let privacyLevel):
+            if privacyLevel == .public {
                 appendInterpolation(convertible.description, privacy: .public)
             } else {
                 appendInterpolation(convertible.description, privacy: .private)
             }
-        case .array(let array):
+        case .array(let array, let privacyLevel):
             let formatted = "[\(array.map { stringify($0) }.joined(separator: ", "))]"
-            if isPublic {
+            if privacyLevel == .public {
                 appendInterpolation(formatted, privacy: .public)
             } else {
                 appendInterpolation(formatted, privacy: .private)
             }
-        case .dictionary(let dict):
+        case .dictionary(let dict, let privacyLevel):
             let formatted = "{\(dict.map { "\($0.key): \(stringify($0.value))" }.joined(separator: ", "))}"
-            if isPublic {
+            if privacyLevel == .public {
                 appendInterpolation(formatted, privacy: .public)
             } else {
                 appendInterpolation(formatted, privacy: .private)
@@ -82,13 +79,13 @@ extension OSLogInterpolation {
     @inlinable
     package func stringify(_ value: Logging.Logger.Metadata.Value) -> String {
         switch value {
-        case .string(let str):
+        case .string(let str, _):
             return str
-        case .stringConvertible(let convertible):
+        case .stringConvertible(let convertible, _):
             return convertible.description
-        case .array(let array):
+        case .array(let array, _):
             return "[\(array.map { stringify($0) }.joined(separator: ", "))]"
-        case .dictionary(let dict):
+        case .dictionary(let dict, _):
             return "{\(dict.map { "\($0.key): \(stringify($0.value))" }.joined(separator: ", "))}"
         }
     }
@@ -150,7 +147,7 @@ struct OSLogHandler: LogHandler {
         if effectiveMetadata.isEmpty {
             self.internalOSLog.log(level: self.mapToOSLogLevel(level), "\(message, privacy: .public)")
         } else {
-            self.internalOSLog.log(level: self.mapToOSLogLevel(level), "\(effectiveMetadata, privacy: .public) \(message, privacy: .public)")
+            self.internalOSLog.log(level: self.mapToOSLogLevel(level), "\(effectiveMetadata) \(message, privacy: .public)")
         }
     }
 
