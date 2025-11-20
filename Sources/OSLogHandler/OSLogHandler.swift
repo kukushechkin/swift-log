@@ -31,11 +31,31 @@ extension OSLogInterpolation {
                 appendLiteral(" ")
             }
             
-            // TODO: this decision should be based on the `value` privacy label instead
-            if key.starts(with: "public_") {
-                appendInterpolation(key, privacy: .public)
-            } else {
-                appendInterpolation(key, privacy: .private)
+            switch value {
+            case .string(_, let privacyLevel):
+                if privacyLevel == .public {
+                    appendInterpolation(key, privacy: .public)
+                } else {
+                    appendInterpolation(key, privacy: .private)
+                }
+            case .stringConvertible(_, let privacyLevel):
+                if privacyLevel == .public {
+                    appendInterpolation(key, privacy: .public)
+                } else {
+                    appendInterpolation(key, privacy: .private)
+                }
+            case .array(_, let privacyLevel):
+                if privacyLevel == .public {
+                    appendInterpolation(key, privacy: .public)
+                } else {
+                    appendInterpolation(key, privacy: .private)
+                }
+            case .dictionary(_, let privacyLevel):
+                if privacyLevel == .public {
+                    appendInterpolation(key, privacy: .public)
+                } else {
+                    appendInterpolation(key, privacy: .private)
+                }
             }
             appendLiteral("=")
             appendInterpolation(value)
