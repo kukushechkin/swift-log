@@ -29,8 +29,92 @@ import WASILibc
 #endif
 
 public enum PrivacyLevel: Sendable, Equatable {
-    case `public`, `private`
+    /// Non-restricted values, logged as-is (key: value).
+    case `public`
+
+    /// Must be redacted (key: [redacted]), unless configured otherwise with a runtime flag.
+    ///
+    /// Use this level for any sensitive data, which should not be
+    /// logged usually and should only be visible during specific
+    /// investigation activities. It is up to the `LogHandler` how this
+    /// data is persisted — redacted or not (I am looking at you `os_log`).
+    ///
+    /// This would cover all kinds of external sensitive data, like
+    /// username, address, raw user requests, etc.
+    case sensitive
+
+    /// Must be hidden (not displayed at all), unless configured otherwise with a runtime flag.
+    ///
+    /// Use this level for any application internal details which should not be
+    /// logged in a production environment by default. Controlled with a runtime flag
+    /// by the `Logger`, while `LogHandler` can override this behavior.
+    ///
+    /// The difference between sensitive and internal is what is the nature of that data:
+    /// external or internal. For example, a username is an external sensitive data,
+    /// while an SQL query the app is about to execute is sensitive, but internal data
+    /// and can be exposed during debugging without exposing sensitive external data.
+    case `internal`
+
+    /// Must be hidden (not displayed at all), unless configured otherwise with a compile flag.
+    ///
+    /// Use this level for any secrets which can never be
+    /// logged in a production environment, both external and internal.
+    /// For example, API keys, user password, etc.
+    /// Controlled with a compile-time flag like DEBUG by the `Logger`.
+    ///
+    /// Or just do not log such a data, really, come on.
+    case secret
 }
+
+/// `Logger` configuration.
+public struct PrivacyLevelStrategy {
+    public enum Action {
+        /// No action, should be displayed as is.
+        case none
+
+        /// Should be redacted with the "[redacted]" string.
+        case redact
+
+        /// Should be redacted with the "hash(process, value)" value.
+        case hash
+
+        /// Should not be displayed at all.
+        case hide
+    }
+
+    public var `public`: () -> Action
+    public var `private`: () -> Action
+    public var `internal`: () -> Action
+    public let secret: Action
+
+    static var production: PrivacyLevelStrategy {
+        .init(
+            public: { .none },
+            private: { .redact },
+            internal: { .hide },
+            secret: .hide
+        )
+    }
+
+    static var debug: PrivacyLevelStrategy {
+        .init(
+            public: { .none },
+            private: { .hash },
+            internal: { .none },
+            secret: .hide
+        )
+    }
+
+    static var bypass: PrivacyLevelStrategy {
+        .init(
+            public: { .none },
+            private: { .none },
+            internal: { .none },
+            secret: .none
+        )
+    }
+}
+
 
 /// A Logger emits log messages using methods that correspond to a log level.
 ///
@@ -889,10 +973,10 @@ extension Logger {
         ///
         /// Because `MetadataValue` implements `ExpressibleByStringInterpolation`, and `ExpressibleByStringLiteral`,
         /// you don't need to type `.string(someType.description)` instead the string interpolation `"\(someType)"`.
-        case string(String, PrivacyLevel = .private)
+        case string(String, PrivacyLevel = .sensitive)
 
         /// A metadata value that conforms to custom string convertible.
-        case stringConvertible(any CustomStringConvertible & Sendable, PrivacyLevel = .private)
+        case stringConvertible(any CustomStringConvertible & Sendable, PrivacyLevel = .sensitive)
 
         /// A metadata value which is a dictionary keyed with strings and storing metadata values.
         ///
@@ -900,13 +984,13 @@ extension Logger {
         ///
         /// Because `MetadataValue` implements `ExpressibleByDictionaryLiteral`, you don't need to type
         /// `.dictionary(["foo": .string("bar \(buz)")])`, instead use the more natural `["foo": "bar \(buz)"]`.
-        case dictionary(Metadata, PrivacyLevel = .private)
+        case dictionary(Metadata, PrivacyLevel = .sensitive)
 
         /// An array of metadata values.
         ///
         /// Because `MetadataValue` implements `ExpressibleByArrayLiteral`, you don't need to type
         /// `.array([.string("foo"), .string("bar \(buz)")])`, instead use the more natural `["foo", "bar \(buz)"]`.
-        case array([Metadata.Value], PrivacyLevel = .private)
+        case array([Metadata.Value], PrivacyLevel = .sensitive)
     }
 
     /// The log level.

@@ -30,7 +30,7 @@ extension OSLogInterpolation {
             if index > 0 {
                 appendLiteral(" ")
             }
-            
+
             switch value {
             case .string(_, let privacyLevel):
                 if privacyLevel == .public {
@@ -117,7 +117,7 @@ struct OSLogHandler: LogHandler {
     let subsystem: String
     let category: String
     public var metadataProvider: Logging.Logger.MetadataProvider?
-    
+
     init(subsystem: String, category: String, metadataProvider: Logging.Logger.MetadataProvider?) {
         self.internalOSLog = os.Logger.init(subsystem: subsystem, category: category)
         self.subsystem = subsystem
@@ -167,7 +167,7 @@ struct OSLogHandler: LogHandler {
         if effectiveMetadata.isEmpty {
             self.internalOSLog.log(level: self.mapToOSLogLevel(level), "\(message, privacy: .public)")
         } else {
-            self.internalOSLog.log(level: self.mapToOSLogLevel(level), "\(effectiveMetadata) \(message, privacy: .public)")
+            self.internalOSLog.log(level: self.mapToOSLogLevel(level), "\(message, privacy: .public) \(effectiveMetadata)")
         }
     }
 

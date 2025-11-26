@@ -16,11 +16,12 @@ import Logging
 
 if #available(macOS 11, *) {
     let myOSLogHandler = OSLogHandler(subsystem: "com.kukushechkin.OSLogHandlerDemo", category: "Test")
-    
+
     var logger = Logger(label: "OSLogHandlerDemo.main")
     logger.handler = myOSLogHandler
-    
+
     logger.debug("this is a debug message", metadata: [
-        "foo": Logger.MetadataValue.string("42", .private)
+        "foo": Logger.MetadataValue.stringConvertible(42, .sensitive),
+        "bar": Logger.MetadataValue.string("fourtytwo", .secret)
     ])
 }
