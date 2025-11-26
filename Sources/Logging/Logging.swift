@@ -902,6 +902,7 @@ extension Logger {
     ///
     /// `Metadata` is a typealias for `[String: Logger.MetadataValue]` the type of the metadata storage.
     public typealias Metadata = [String: MetadataValue]
+    public typealias ExtendedMetadata = [String: ExtendedMetadataValue]
 
     /// A logging metadata value.
     ///
@@ -991,6 +992,42 @@ extension Logger {
         /// Because `MetadataValue` implements `ExpressibleByArrayLiteral`, you don't need to type
         /// `.array([.string("foo"), .string("bar \(buz)")])`, instead use the more natural `["foo", "bar \(buz)"]`.
         case array([Metadata.Value], PrivacyLevel = .sensitive)
+    }
+
+    public enum MetadataValuePrivacyLevel {
+        case `public`
+        case sensitive
+        case `internal`
+        case secret
+    }
+
+    public struct MetadataValueProperties {
+        let privacyLevel: MetadataValuePrivacyLevel
+    }
+
+    public enum ExtendedMetadataValue {
+        /// A string metadata value.
+        ///
+        /// Because `MetadataValue` implements `ExpressibleByStringInterpolation`, and `ExpressibleByStringLiteral`,
+        /// you don't need to type `.string(someType.description)` instead the string interpolation `"\(someType)"`.
+        case string(@autoclosure () -> String, MetadataValueProperties)
+
+        /// A metadata value that conforms to custom string convertible.
+        case stringConvertible(@autoclosure () -> any CustomStringConvertible & Sendable, MetadataValueProperties)
+
+        /// A metadata value which is a dictionary keyed with strings and storing metadata values.
+        ///
+        /// The type signature of the dictionary is `[String: Logger.MetadataValue]`.
+        ///
+        /// Because `MetadataValue` implements `ExpressibleByDictionaryLiteral`, you don't need to type
+        /// `.dictionary(["foo": .string("bar \(buz)")])`, instead use the more natural `["foo": "bar \(buz)"]`.
+        case dictionary(ExtendedMetadata)
+
+        /// An array of metadata values.
+        ///
+        /// Because `MetadataValue` implements `ExpressibleByArrayLiteral`, you don't need to type
+        /// `.array([.string("foo"), .string("bar \(buz)")])`, instead use the more natural `["foo", "bar \(buz)"]`.
+        case array([ExtendedMetadata.Value])
     }
 
     /// The log level.
