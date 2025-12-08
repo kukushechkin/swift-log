@@ -58,7 +58,8 @@ struct LoggingTest {
             {
                 Issue.record("debug should not be called")
                 return "debug"
-            }()
+            }(),
+            metadata: nil
         )
         logger.trace(
             {
@@ -515,7 +516,7 @@ struct LoggingTest {
         logger.debug(self.dontEvaluateThisString())
         logger.info(self.dontEvaluateThisString())
         logger.warning(self.dontEvaluateThisString())
-        logger.log(level: .warning, self.dontEvaluateThisString())
+        logger.log(level: .warning, self.dontEvaluateThisString(), metadata: nil)
     }
 
     @Test func localMetadata() {

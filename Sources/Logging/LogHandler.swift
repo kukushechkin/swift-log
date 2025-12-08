@@ -160,6 +160,41 @@ public protocol LogHandler: _SwiftLogSendableLogHandler {
         line: UInt
     )
 
+    /// The library calls this method when a log handler must emit a log message with attributed metadata.
+    ///
+    /// This method is called when using the privacy-aware attributed metadata logging APIs.
+    ///
+    /// Handlers implementing this method are responsible for merging their own `metadata` property,
+    /// `metadataProvider` output, and the explicit `attributedMetadata` parameter. Handler metadata
+    /// and provider values should be treated as `.public()`. Explicit attributed metadata should take
+    /// precedence. The default implementation demonstrates this merging pattern.
+    ///
+    /// LogHandlers that don't implement this method will use the default implementation, which merges
+    /// metadata, filters to only public values, and calls the plain metadata log method. Private metadata
+    /// is completely omitted to prevent accidental exposure.
+    ///
+    /// There is no need for the `LogHandler` to check if the `level` is above or
+    /// below the configured `logLevel` as `Logger` already performed this check and
+    /// determined that a message should be logged.
+    ///
+    /// - Parameters:
+    ///   - level: The log level of the message.
+    ///   - message: The message to log. To obtain a `String` representation call `message.description`.
+    ///   - attributedMetadata: The attributed metadata associated with this log message, including privacy labels.
+    ///   - source: The source where the log message originated, for example the logging module.
+    ///   - file: The file this log message originates from.
+    ///   - function: The function this log message originates from.
+    ///   - line: The line this log message originates from.
+    func log(
+        level: Logger.Level,
+        message: Logger.Message,
+        attributedMetadata: Logger.AttributedMetadata?,
+        source: String,
+        file: String,
+        function: String,
+        line: UInt
+    )
+
     /// SwiftLog 1.0 log compatibility method.
     ///
     /// Please do _not_ implement this method when you create a LogHandler implementation.
@@ -204,6 +239,14 @@ public protocol LogHandler: _SwiftLogSendableLogHandler {
     ///         that means a change in log level on a particular `LogHandler` might not be reflected in any
     ///        `LogHandler`.
     var logLevel: Logger.Level { get set }
+
+    /// Get or set the privacy behavior for attributed metadata logging.
+    ///
+    /// This property controls how the handler processes private metadata values when using
+    /// the attributed metadata logging API. Handlers that don't implement this property will
+    /// use the default implementation, which always returns `.redact` and ignores writes.
+    ///
+    var privacyBehavior: Logger.PrivacyBehavior { get set }
 }
 
 extension LogHandler {
@@ -229,6 +272,18 @@ extension LogHandler {
                 )
             }
             #endif
+        }
+    }
+
+    /// Default implementation for privacy behavior that defaults to `.redact`.
+    ///
+    /// This default exists in order to facilitate the source-compatible introduction of the `privacyBehavior` protocol requirement.
+    public var privacyBehavior: Logger.PrivacyBehavior {
+        get {
+            .redact
+        }
+        set {
+            // Ignore writes for handlers that don't implement privacyBehavior
         }
     }
 }
@@ -278,6 +333,64 @@ extension LogHandler {
             message: message,
             metadata: metadata,
             source: Logger.currentModule(filePath: file),
+            file: file,
+            function: function,
+            line: line
+        )
+    }
+}
+
+extension LogHandler {
+    /// Default implementation provides backward compatibility by filtering private metadata.
+    ///
+    /// LogHandlers that don't implement the attributed metadata method will only receive
+    /// metadata marked as public. Private metadata is completely omitted to prevent accidental
+    /// exposure in non-privacy-aware handlers. Handlers wanting full control over privacy
+    /// must implement the attributed metadata method directly.
+    ///
+    /// This implementation filters attributed metadata to only public values and passes them
+    /// to the plain metadata log method, which handles merging with handler metadata and
+    /// metadata provider values as normal.
+    ///
+    /// - Parameters:
+    ///   - level: The log level of the message.
+    ///   - message: The message to log.
+    ///   - attributedMetadata: The attributed metadata associated to this log message.
+    ///   - source: The source where the log message originated.
+    ///   - file: The file this log message originates from.
+    ///   - function: The function this log message originates from.
+    ///   - line: The line this log message originates from.
+    public func log(
+        level: Logger.Level,
+        message: Logger.Message,
+        attributedMetadata: Logger.AttributedMetadata?,
+        source: String,
+        file: String,
+        function: String,
+        line: UInt
+    ) {
+        // For handlers that don't support privacy labels, only pass public metadata
+        // Private metadata is completely omitted to prevent accidental exposure
+        let publicMetadata: Logger.Metadata?
+        if let attributedMetadata = attributedMetadata {
+            let filtered = attributedMetadata.compactMapValues { attributedValue -> Logger.Metadata.Value? in
+                if attributedValue.properties.privacyLevel == .public {
+                    return attributedValue.value
+                } else {
+                    return nil
+                }
+            }
+            publicMetadata = filtered.isEmpty ? nil : filtered
+        } else {
+            publicMetadata = nil
+        }
+
+        // Pass to plain log method which will merge with handler metadata and provider
+        self.log(
+            level: level,
+            message: message,
+            metadata: publicMetadata,
+            source: source,
             file: file,
             function: function,
             line: line

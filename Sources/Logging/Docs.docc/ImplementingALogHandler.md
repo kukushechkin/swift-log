@@ -199,6 +199,187 @@ public struct PrintLogHandler: LogHandler {
 }
 ```
 
+#### Privacy-aware logging
+
+Privacy-aware logging allows your handler to support privacy labels on metadata values, enabling applications to mark sensitive data as private and control how it's logged.
+
+To implement privacy-aware logging:
+
+1. **Add the `privacyBehavior` property** to your handler:
+
+```swift
+public struct MyLogHandler: LogHandler {
+    public var privacyBehavior: Logger.PrivacyBehavior = .redact
+    // ... other properties
+}
+```
+
+2. **Implement the attributed metadata log method with merging**:
+
+```swift
+public func log(
+    level: Logger.Level,
+    message: Logger.Message,
+    attributedMetadata: Logger.AttributedMetadata?,
+    source: String,
+    file: String,
+    function: String,
+    line: UInt
+) {
+    // Merge handler metadata, provider metadata, and explicit attributed metadata
+    var merged = Logger.AttributedMetadata()
+
+    // Add handler metadata as public
+    for (key, value) in self.metadata {
+        merged[key] = Logger.AttributedMetadataValue(value, privacy: .public)
+    }
+
+    // Add metadata provider values as public
+    if let provider = self.metadataProvider {
+        for (key, value) in provider.get() {
+            merged[key] = Logger.AttributedMetadataValue(value, privacy: .public)
+        }
+    }
+
+    // Merge with explicit attributed metadata (takes precedence)
+    if let attributedMetadata = attributedMetadata {
+        for (key, value) in attributedMetadata {
+            merged[key] = value
+        }
+    }
+
+    // Process merged metadata based on privacy level and behavior
+    let processedMetadata = merged.compactMapValues { attributed in
+        switch (attributed.properties.privacyLevel, self.privacyBehavior) {
+        case (.public, _):
+            return attributed.value  // Always log public values
+        case (.private, .log):
+            return attributed.value  // Log private values when configured
+        case (.private, .redact):
+            return .string("***")    // Redact private values
+        }
+    }
+
+    // Send processedMetadata to your logging backend
+    // ...
+}
+```
+
+**Key considerations:**
+
+- **Respect `privacyBehavior`**: Your handler should honor the privacy behavior setting. Applications expect `.redact` to protect sensitive data.
+
+- **Backend-specific privacy**: If your logging backend has native privacy features (field-level encryption, PII scrubbing), you can use the privacy level to configure backend behavior instead of redacting locally:
+
+```swift
+for (key, attributed) in attributedMetadata ?? [:] {
+    switch attributed.properties.privacyLevel {
+    case .public:
+        sendField(key, attributed.value, encrypted: false)
+    case .private:
+        // Use backend's encryption/scrubbing feature
+        sendField(key, attributed.value, encrypted: true)
+    }
+}
+```
+
+- **Default filtering**: If you don't implement the attributed metadata method, the default implementation filters attributed metadata to only public values and passes them to the plain `log(level:message:metadata:...)` method, which handles merging with handler metadata and metadata provider values as normal. Private metadata is completely omitted to prevent accidental exposure.
+
+- **Handler metadata merging**: Your handler is responsible for merging its own `metadata` property, `metadataProvider` output, and the explicit `attributedMetadata` parameter. This is consistent with how plain metadata logging works. Handler metadata and provider values should be treated as `.public()`, and explicit attributed metadata should take precedence.
+
+**Example: Privacy-aware handler**
+
+```swift
+public struct PrivacyAwareLogHandler: LogHandler {
+    private let label: String
+    public var logLevel: Logger.Level = .info
+    public var metadata: Logger.Metadata = [:]
+    public var metadataProvider: Logger.MetadataProvider?
+    public var privacyBehavior: Logger.PrivacyBehavior = .redact
+
+    public init(label: String) {
+        self.label = label
+    }
+
+    // Plain metadata logging (backward compatible)
+    public func log(
+        level: Logger.Level,
+        message: Logger.Message,
+        metadata: Logger.Metadata?,
+        source: String,
+        file: String,
+        function: String,
+        line: UInt
+    ) {
+        // Handle plain metadata normally
+        let output = formatLog(level: level, message: message, metadata: metadata)
+        print(output)
+    }
+
+    // Privacy-aware attributed metadata logging
+    public func log(
+        level: Logger.Level,
+        message: Logger.Message,
+        attributedMetadata: Logger.AttributedMetadata?,
+        source: String,
+        file: String,
+        function: String,
+        line: UInt
+    ) {
+        // Merge handler metadata, provider metadata, and explicit attributed metadata
+        var merged = Logger.AttributedMetadata()
+
+        // Add handler metadata as public
+        for (key, value) in self.metadata {
+            merged[key] = Logger.AttributedMetadataValue(value, privacy: .public)
+        }
+
+        // Add metadata provider values as public
+        if let provider = self.metadataProvider {
+            for (key, value) in provider.get() {
+                merged[key] = Logger.AttributedMetadataValue(value, privacy: .public)
+            }
+        }
+
+        // Merge with explicit attributed metadata (takes precedence)
+        if let attributedMetadata = attributedMetadata {
+            for (key, value) in attributedMetadata {
+                merged[key] = value
+            }
+        }
+
+        // Process merged metadata based on privacy settings
+        let processedMetadata = merged.compactMapValues { attributed -> Logger.Metadata.Value? in
+            switch (attributed.properties.privacyLevel, self.privacyBehavior) {
+            case (.public, _):
+                return attributed.value
+            case (.private, .log):
+                return attributed.value
+            case (.private, .redact):
+                return .string("***")
+            }
+        }
+
+        let output = formatLog(level: level, message: message, metadata: processedMetadata)
+        print(output)
+    }
+
+    public subscript(metadataKey key: String) -> Logger.Metadata.Value? {
+        get { self.metadata[key] }
+        set { self.metadata[key] = newValue }
+    }
+
+    private func formatLog(
+        level: Logger.Level,
+        message: Logger.Message,
+        metadata: Logger.Metadata?
+    ) -> String {
+        let metadataString = metadata?.map { "\($0.key)=\($0.value)" }.joined(separator: " ") ?? ""
+        return "\(label) \(level): \(message) \(metadataString)"
+    }
+}
+```
+
 ### Performance considerations
 
 1. **Avoid blocking**: Don't block the calling thread for I/O operations.
