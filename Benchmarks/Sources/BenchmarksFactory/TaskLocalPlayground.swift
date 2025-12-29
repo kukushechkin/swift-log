@@ -19,11 +19,15 @@ import Logging
 actor GlobalLoggerContext {
     /// MARK: - task local logger
 
+    #if BenchmarkTaskLocalWithConsoleLogger
     @TaskLocal
-    // static var taskLocalLogger = Logger(label: "TaskLocalPlaygroundLogger_global") { _ in
-    //     NoOpLogHandler(label: "NoOpLogHandler_global")
-    // }
     static var taskLocalLogger = Logger(label: "TaskLocalPlaygroundLogger_global")
+    #else
+    @TaskLocal
+    static var taskLocalLogger = Logger(label: "TaskLocalPlaygroundLogger_global") { _ in
+        NoOpLogHandler(label: "NoOpLogHandler_global")
+    }
+    #endif
 
     @inline(__always)
     static func withTaskLocalLoggerInline(metadata: Logger.Metadata, _ body: (Logger) -> Void) {
@@ -37,25 +41,38 @@ actor GlobalLoggerContext {
 /// MARK: - payload functions
 
 @inline(never)
-func explicitLogger(logger: Logger, iterations: Int = 100) {
+func explicitLogger(logger: Logger, iterations: Int = 100, moreMetadata: Bool = true) {
     if iterations == 0 {
         return
     }
     logger.info("I am a recursive function")
-    var newLogger = logger
-    newLogger[metadataKey: "iteration-\(iterations)-key"] = "iteration-\(iterations)-value"
-    explicitLogger(logger: newLogger, iterations: iterations - 1)
+    let additionalMetadata: Logger.Metadata = if moreMetadata {[
+        "iteration-\(iterations)-key1": "iteration-\(iterations)-value1",
+        "iteration-\(iterations)-key2": "iteration-\(iterations)-value2",
+        "iteration-\(iterations)-key3": "iteration-\(iterations)-value3"
+    ]} else {[
+        "iteration-\(iterations)-key1": "iteration-\(iterations)-value1"
+    ]}
+    explicitLogger(
+        logger: logger.with(additionalMetadata: additionalMetadata),
+        iterations: iterations - 1
+    )
     logger.info("I am done")
 }
 
 @inline(never)
-func implicitLogger(iterations: Int = 100) {
+func implicitLogger(iterations: Int = 100, moreMetadata: Bool = true) {
     if iterations == 0 {
         return
     }
-    GlobalLoggerContext.withTaskLocalLoggerInline(metadata: [
-        "iteration-\(iterations)-key": "iteration-\(iterations)-value"
-    ]) { logger in
+    let additionalMetadata: Logger.Metadata = if moreMetadata {[
+        "iteration-\(iterations)-key1": "iteration-\(iterations)-value1",
+        "iteration-\(iterations)-key2": "iteration-\(iterations)-value2",
+        "iteration-\(iterations)-key3": "iteration-\(iterations)-value3"
+    ]} else {[
+        "iteration-\(iterations)-key1": "iteration-\(iterations)-value1"
+    ]}
+    GlobalLoggerContext.withTaskLocalLoggerInline(metadata: additionalMetadata) { logger in
         logger.info("I am a recursive function using task local logger")
         implicitLogger(iterations: iterations - 1)
         logger.info("I am done")
@@ -64,9 +81,24 @@ func implicitLogger(iterations: Int = 100) {
 
 /// MARK: - benchmarking functions
 
+func benchmarkLoggerPropagation() {
+    let iterations = 1_000_000_000
+    let taskLocalBenchmarksMetrics: [BenchmarkMetric] = [.instructions, .objectAllocCount, .wallClock]
+
+    #if BenchmarkTaskLocalLogger
+    benchmarkImplicitTaskLocalLoggerPropagation(iterations, taskLocalBenchmarksMetrics)
+    #endif
+
+    #if BenchmarkExplicitLogger
+    benchmarkExplicitLoggerPropagation(iterations, taskLocalBenchmarksMetrics)
+    #endif
+}
+
 func benchmarkExplicitLoggerPropagation(_ iterations: Int, _ metrics: [BenchmarkMetric]) {
     var logger = Logger(label: "TaskLocalPlaygroundLogger_explicit")
-    // logger.handler = NoOpLogHandler(label: "NoOpLogHandler_explicit")
+    #if !BenchmarkTaskLocalWithConsoleLogger
+    logger.handler = NoOpLogHandler(label: "NoOpLogHandler_explicit")
+    #endif
     Benchmark(
         "TaskLocalPlaygroundBenchmark",
         configuration: .init(
@@ -75,6 +107,15 @@ func benchmarkExplicitLoggerPropagation(_ iterations: Int, _ metrics: [Benchmark
         )
     ) { benchmark in
         explicitLogger(logger: logger)
+    }
+    Benchmark(
+        "TaskLocalPlaygroundBenchmark_singleMetadataValue",
+        configuration: .init(
+            metrics: metrics,
+            maxIterations: iterations
+        )
+    ) { benchmark in
+        explicitLogger(logger: logger, moreMetadata: false)
     }
 }
 
@@ -88,12 +129,13 @@ func benchmarkImplicitTaskLocalLoggerPropagation(_ iterations: Int, _ metrics: [
     ) { benchmark in
         implicitLogger()
     }
+    Benchmark(
+        "TaskLocalPlaygroundBenchmark_singleMetadataValue",
+        configuration: .init(
+            metrics: metrics,
+            maxIterations: iterations
+        )
+    ) { benchmark in
+        implicitLogger(moreMetadata: false)
+    }
 }
-
-// let taskLocalBenchmarks: @Sendable () -> Void = {
-//     let iterations = 1_000_000
-//     let metrics: [BenchmarkMetric] = [.instructions, .objectAllocCount, .wallClock]
-
-//     benchmarkExplicitLoggerPropagation(iterations, metrics)
-//     // benchmarkImplicitTaskLocalLoggerPropagation(iterations, metrics)
-// }

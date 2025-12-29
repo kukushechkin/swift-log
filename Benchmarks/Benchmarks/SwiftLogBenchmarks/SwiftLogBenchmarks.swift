@@ -21,9 +21,7 @@ let benchmarks: @Sendable () -> Void = {
     let metrics: [BenchmarkMetric] = [.instructions, .objectAllocCount]
 
     // Task Local related benchmarks
-    let taskLocalBenchmarksMetrics: [BenchmarkMetric] = [.instructions, .objectAllocCount, .wallClock]
-    // benchmarkExplicitLoggerPropagation(iterations, taskLocalBenchmarksMetrics)
-    benchmarkImplicitTaskLocalLoggerPropagation(iterations, taskLocalBenchmarksMetrics)
+    benchmarkLoggerPropagation()
 
     // Take a pair of levels to cover all condition ranges between the active level and logged level.
     let logLevelParameterization: [Logger.Level] = [.debug, .error]
