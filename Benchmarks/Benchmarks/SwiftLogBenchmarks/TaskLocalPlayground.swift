@@ -27,10 +27,7 @@ actor GlobalLoggerContext {
 
     @inline(__always)
     static func withTaskLocalLoggerInline(metadata: Logger.Metadata, _ body: (Logger) -> Void) {
-        var newLogger = self.taskLocalLogger
-        for metadataValue in metadata {
-            newLogger[metadataKey: metadataValue.0] = metadataValue.1
-        }
+        let newLogger = self.taskLocalLogger.with(additionalMetadata: metadata)
         self.$taskLocalLogger.withValue(newLogger) {
             body(self.taskLocalLogger)
         }
