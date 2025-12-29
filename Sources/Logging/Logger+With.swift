@@ -26,9 +26,11 @@ extension Logger {
     @inlinable
     public func with(additionalMetadata: Logger.Metadata) -> Logger {
         var newLogger = self
-        var newHandler = newLogger.handler
-        newHandler.metadata.merge(additionalMetadata) { _, new in new }
-        newLogger.handler = newHandler
+        if additionalMetadata.count == 1 {
+            newLogger.handler.metadata[additionalMetadata.first!.key] = additionalMetadata.first!.value
+        } else {
+            newLogger.handler.metadata.merge(additionalMetadata) { _, new in new }
+        }
         return newLogger
     }
 
@@ -125,10 +127,12 @@ extension Logger {
     @inlinable
     public func with(additionalMetadata: Logger.Metadata, logLevel: Logger.Level) -> Logger {
         var newLogger = self
-        var newHandler = newLogger.handler
-        newHandler.metadata.merge(additionalMetadata) { _, new in new }
-        newHandler.logLevel = logLevel
-        newLogger.handler = newHandler
+        if additionalMetadata.count == 1 {
+            newLogger.handler.metadata[additionalMetadata.first!.key] = additionalMetadata.first!.value
+        } else {
+            newLogger.handler.metadata.merge(additionalMetadata) { _, new in new }
+        }
+        newLogger.logLevel = logLevel
         return newLogger
     }
 
@@ -163,7 +167,11 @@ extension Logger {
     public func with(additionalMetadata: Logger.Metadata, handler: any LogHandler) -> Logger {
         var newLogger = self
         var newHandler = handler
-        newHandler.metadata.merge(additionalMetadata) { _, new in new }
+        if additionalMetadata.count == 1 {
+            newHandler.metadata[additionalMetadata.first!.key] = additionalMetadata.first!.value
+        } else {
+            newHandler.metadata.merge(additionalMetadata) { _, new in new }
+        }
         newLogger.handler = newHandler
         return newLogger
     }
@@ -244,7 +252,11 @@ extension Logger {
     public func with(additionalMetadata: Logger.Metadata, logLevel: Logger.Level, handler: any LogHandler) -> Logger {
         var newLogger = self
         var newHandler = handler
-        newHandler.metadata.merge(additionalMetadata) { _, new in new }
+        if additionalMetadata.count == 1 {
+            newHandler.metadata[additionalMetadata.first!.key] = additionalMetadata.first!.value
+        } else {
+            newHandler.metadata.merge(additionalMetadata) { _, new in new }
+        }
         newHandler.logLevel = logLevel
         newLogger.handler = newHandler
         return newLogger

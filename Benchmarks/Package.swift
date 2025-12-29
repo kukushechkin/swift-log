@@ -1,4 +1,4 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 6.1
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import PackageDescription
@@ -7,6 +7,12 @@ let package = Package(
     name: "Benchmarks",
     platforms: [
         .macOS(.v13)
+    ],
+    traits: [
+        // Console handler or NoOp handler?
+        "BenchmarkTaskLocalWithConsoleLogger",
+        // Mutually exclusive benchmarks, run one then another with "benchmark check" to compare the results
+        "BenchmarkTaskLocalLogger", "BenchmarkExplicitLogger"
     ],
     dependencies: [
         .package(path: "../"),
