@@ -1,0 +1,36 @@
+# LLDB configuration for swift-log debugging
+# Filters out task-local logger implementation frames from stack traces
+#
+# IMPORTANT: This configuration only affects LLDB console commands.
+# Xcode GUI debugger controls (step buttons, stack navigator) ignore these settings.
+#
+# Installation for command-line LLDB:
+#   mkdir -p ~/.lldb
+#   cp .lldbinit ~/.lldbinit
+#   cp swift_logging_frames_filtering.py ~/.lldb/
+#   chmod 644 ~/.lldbinit ~/.lldb/swift_logging_frames_filtering.py
+#
+# For Xcode console LLDB (optional):
+#   defaults write com.apple.dt.Xcode IDEDebuggerFeatures -dict-add "CommandLineLoadLLDBInit" -bool YES
+#   Then restart Xcode
+#   Note: Only affects console commands like 'bt', 'step', 'next', not GUI buttons
+#
+# Project-specific usage:
+#   In LLDB: command source /path/to/swift-log/.lldbinit
+#
+# Commands (console only):
+#   bt                         - backtrace with task-local frames filtered
+#   btu                        - backtrace unfiltered (shows all frames)
+#   step / next                - skip task-local frames when stepping
+#   toggle-tasklocal-frames    - toggle filtering on/off
+#
+# Limitations:
+# - Xcode GUI step buttons ignore step-avoid-regexp
+# - Xcode GUI stack navigator shows all frames (cannot be filtered)
+# - Only works when using LLDB commands in the console
+
+# Avoid stepping into task-local implementation details (console commands only)
+settings set target.process.thread.step-avoid-regexp "^(TaskLocal\\.withValue|GlobalLoggerContext\\.withTaskLocalLoggerInline|closure #[0-9]+ in static GlobalLoggerContext\\.withTaskLocalLoggerInline)"
+
+# Load Python helper script for filtered backtrace command
+command script import ~/.lldb/swift_logging_frames_filtering.py
