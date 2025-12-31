@@ -1868,6 +1868,109 @@ private final class WarnOnceBox: @unchecked Sendable {
 }
 #endif
 
+// MARK: - Task-local logger storage
+
+@available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
+extension Logger {
+    /// Task-local storage for implicit logger context propagation.
+    ///
+    /// This storage enables the static `Logger.with()` methods and `Logger.withExistingContext()` to work
+    /// without requiring explicit logger parameters throughout the call stack.
+    ///
+    /// > Warning: This property is implementation detail and should not be accessed directly.
+    /// > Use ``Logger/withExistingContext(_:)`` to access the current task-local logger,
+    /// > or ``Logger/with(additionalMetadata:_:)`` to modify it.
+    @TaskLocal
+    public static var _taskLocalLogger: Logger?
+
+    /// Access the current task-local logger.
+    ///
+    /// This property provides access to the logger stored in task-local storage. If no task-local logger
+    /// has been set, it lazily initializes a no-op logger that discards all log messages. Users should
+    /// explicitly set up a logger with an appropriate handler at application entry points using
+    /// ``Logger/$_taskLocalLogger`` or ``Logger/with(additionalMetadata:_:)`` to enable actual logging.
+    ///
+    /// - Note: This property is internal and should not be accessed directly. Use `Logger.withExistingContext()`
+    ///   to access the task-local logger in application code.
+    @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
+    @usableFromInline
+    internal static var currentTaskLocalLogger: Logger {
+        if let logger = _taskLocalLogger {
+            return logger
+        }
+        // Initialize with no-op handler to decouple from global state.
+        // Users should explicitly set up a logger at application entry points.
+        return Logger(label: "task-local") { _ in SwiftLogNoOpLogHandler() }
+    }
+
+    /// Execute a closure with access to the current task-local logger.
+    ///
+    /// This method provides access to the logger stored in task-local storage, allowing you to extract it
+    /// when needed (for example, in library code that wants to log without requiring an explicit logger parameter,
+    /// or in performance-critical sections where you want to pass the logger explicitly).
+    ///
+    /// If no task-local logger has been set, this method provides a no-op logger that discards all log messages.
+    /// Users should explicitly set up a logger at application entry points using ``Logger/$_taskLocalLogger``
+    /// or ``Logger/with(additionalMetadata:_:)`` to enable actual logging.
+    ///
+    /// Example usage in library code:
+    ///
+    /// ```swift
+    /// public struct MyLibrary {
+    ///     public func doWork() {
+    ///         Logger.withExistingContext { logger in
+    ///             logger.info("Library doing work")
+    ///             // Uses whatever logger context the caller set up
+    ///         }
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// - Parameter body: The closure to execute with the task-local logger.
+    @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
+    @inlinable
+    public static func withExistingContext(_ body: (Logger) -> Void) {
+        body(Self.currentTaskLocalLogger)
+    }
+
+    /// Execute a closure with access to the current task-local logger.
+    ///
+    /// This method provides access to the logger stored in task-local storage, allowing you to extract it
+    /// and return a value from the closure.
+    ///
+    /// - Parameter body: The closure to execute with the task-local logger.
+    /// - Returns: The value returned by the closure.
+    @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
+    @inlinable
+    public static func withExistingContext<R>(_ body: (Logger) -> R) -> R {
+        body(Self.currentTaskLocalLogger)
+    }
+
+    /// Execute an async closure with access to the current task-local logger.
+    ///
+    /// This method provides access to the logger stored in task-local storage for async operations.
+    ///
+    /// - Parameter body: The async closure to execute with the task-local logger.
+    @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
+    @inlinable
+    public static func withExistingContext(_ body: (Logger) async -> Void) async {
+        await body(Self.currentTaskLocalLogger)
+    }
+
+    /// Execute an async closure with access to the current task-local logger.
+    ///
+    /// This method provides access to the logger stored in task-local storage for async operations
+    /// that return a value.
+    ///
+    /// - Parameter body: The async closure to execute with the task-local logger.
+    /// - Returns: The value returned by the closure.
+    @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
+    @inlinable
+    public static func withExistingContext<R>(_ body: (Logger) async -> R) async -> R {
+        await body(Self.currentTaskLocalLogger)
+    }
+}
+
 // MARK: - Sendable support helpers
 
 extension Logger.MetadataValue: Sendable {}
