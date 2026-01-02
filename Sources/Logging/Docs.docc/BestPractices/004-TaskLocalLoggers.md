@@ -21,7 +21,7 @@ Set logging context once at request entry points, automatically available throug
 ```swift
 // Set context at HTTP request entry point
 func handleHTTPRequest(_ request: HTTPRequest) async throws -> HTTPResponse {
-    return try await Logger.with(
+    try await Logger.with(
         additionalMetadata: [
             "request.id": "\(request.id)",
             "request.method": "\(request.method)",
@@ -29,6 +29,7 @@ func handleHTTPRequest(_ request: HTTPRequest) async throws -> HTTPResponse {
         ]
     ) { logger in
         logger.info("Handling request")
+        // Child tasks will inherit the metadata from this context
         let result = try await processRequest(request)
         logger.info("Request completed")
         return result
