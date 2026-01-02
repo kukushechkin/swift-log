@@ -15,7 +15,7 @@ let package = Package(
         // Console handler or NoOp handler?
         "BenchmarkTaskLocalWithConsoleLogger",
         // Mutually exclusive benchmarks, run one then another with "benchmark check" to compare the results
-        "BenchmarkTaskLocalLogger", "BenchmarkExplicitLogger"
+        "BenchmarkTaskLocalLogger", "BenchmarkExplicitLogger",
     ],
     dependencies: [
         .package(url: "https://github.com/ordo-one/package-benchmark.git", from: "1.29.6"),
