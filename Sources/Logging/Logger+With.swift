@@ -134,7 +134,11 @@ extension Logger {
     ///   - handler: The log handler to use for the new logger.
     /// - Returns: A new `Logger` instance with the specified modifications.
     @inlinable
-    public func copy(with additionalMetadata: Logger.Metadata, logLevel: Logger.Level, handler: any LogHandler) -> Logger {
+    public func copy(
+        with additionalMetadata: Logger.Metadata,
+        logLevel: Logger.Level,
+        handler: any LogHandler
+    ) -> Logger {
         var newLogger = self
         var newHandler = handler
         if additionalMetadata.count == 1 {
@@ -649,7 +653,11 @@ extension Logger {
         handler: any LogHandler,
         _ body: (Logger) -> Void
     ) {
-        let modifiedLogger = Logger.currentTaskLocalLogger.copy(with: additionalMetadata, logLevel: logLevel, handler: handler)
+        let modifiedLogger = Logger.currentTaskLocalLogger.copy(
+            with: additionalMetadata,
+            logLevel: logLevel,
+            handler: handler
+        )
         Logger.$_taskLocalLogger.withValue(modifiedLogger) {
             body(modifiedLogger)
         }
@@ -670,7 +678,11 @@ extension Logger {
         handler: any LogHandler,
         _ body: (Logger) -> R
     ) -> R {
-        let modifiedLogger = Logger.currentTaskLocalLogger.copy(with: additionalMetadata, logLevel: logLevel, handler: handler)
+        let modifiedLogger = Logger.currentTaskLocalLogger.copy(
+            with: additionalMetadata,
+            logLevel: logLevel,
+            handler: handler
+        )
         return Logger.$_taskLocalLogger.withValue(modifiedLogger) {
             body(modifiedLogger)
         }
@@ -690,7 +702,11 @@ extension Logger {
         handler: any LogHandler,
         _ body: (Logger) async -> Void
     ) async {
-        let modifiedLogger = Logger.currentTaskLocalLogger.copy(with: additionalMetadata, logLevel: logLevel, handler: handler)
+        let modifiedLogger = Logger.currentTaskLocalLogger.copy(
+            with: additionalMetadata,
+            logLevel: logLevel,
+            handler: handler
+        )
         await Logger.$_taskLocalLogger.withValue(modifiedLogger) {
             await body(modifiedLogger)
         }
@@ -711,7 +727,11 @@ extension Logger {
         handler: any LogHandler,
         _ body: (Logger) async -> R
     ) async -> R {
-        let modifiedLogger = Logger.currentTaskLocalLogger.copy(with: additionalMetadata, logLevel: logLevel, handler: handler)
+        let modifiedLogger = Logger.currentTaskLocalLogger.copy(
+            with: additionalMetadata,
+            logLevel: logLevel,
+            handler: handler
+        )
         return await Logger.$_taskLocalLogger.withValue(modifiedLogger) {
             await body(modifiedLogger)
         }
