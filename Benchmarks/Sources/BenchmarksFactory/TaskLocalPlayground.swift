@@ -16,66 +16,87 @@ import Benchmark
 import Foundation
 import Logging
 
-actor GlobalLoggerContext {
-    /// MARK: - task local logger
+// MARK: - Task-local logger setup
 
+/// Set up the task-local logger for benchmarking.
+///
+/// This function initializes the task-local logger with either a console logger
+/// or a no-op logger depending on the build configuration.
+func setupTaskLocalLogger() {
     #if BenchmarkTaskLocalWithConsoleLogger
-    @TaskLocal
-    static var taskLocalLogger = Logger(label: "TaskLocalPlaygroundLogger_global")
+    let logger = Logger(label: "TaskLocalPlaygroundLogger_global")
     #else
-    @TaskLocal
-    static var taskLocalLogger = Logger(label: "TaskLocalPlaygroundLogger_global") { _ in
+    let logger = Logger(label: "TaskLocalPlaygroundLogger_global") { _ in
         NoOpLogHandler(label: "NoOpLogHandler_global")
     }
     #endif
-
-    @inline(__always)
-    static func withTaskLocalLoggerInline(metadata: Logger.Metadata, _ body: (Logger) -> Void) {
-        let newLogger = self.taskLocalLogger.with(additionalMetadata: metadata)
-        self.$taskLocalLogger.withValue(newLogger) {
-            body(self.taskLocalLogger)
-        }
+    Logger.$_taskLocalLogger.withValue(logger) {
+        // Logger is now set for this task scope
     }
 }
 
-/// MARK: - payload functions
+// MARK: - Payload functions
 
+/// Benchmark function using explicit logger parameter passing.
+///
+/// This function demonstrates the traditional approach of explicitly passing
+/// logger instances through the call stack. Each recursive call receives a logger
+/// with accumulated metadata.
 @inline(never)
 func explicitLogger(logger: Logger, iterations: Int = 100, moreMetadata: Bool = true) {
     if iterations == 0 {
         return
     }
     logger.info("I am a recursive function")
-    let additionalMetadata: Logger.Metadata = if moreMetadata {[
-        "iteration-\(iterations)-key1": "iteration-\(iterations)-value1",
-        "iteration-\(iterations)-key2": "iteration-\(iterations)-value2",
-        "iteration-\(iterations)-key3": "iteration-\(iterations)-value3"
-    ]} else {[
-        "iteration-\(iterations)-key1": "iteration-\(iterations)-value1"
-    ]}
+    let additionalMetadata: Logger.Metadata =
+        if moreMetadata {
+            [
+                "iteration-\(iterations)-key1": "iteration-\(iterations)-value1",
+                "iteration-\(iterations)-key2": "iteration-\(iterations)-value2",
+                "iteration-\(iterations)-key3": "iteration-\(iterations)-value3",
+            ]
+        } else {
+            [
+                "iteration-\(iterations)-key1": "iteration-\(iterations)-value1"
+            ]
+        }
     explicitLogger(
-        logger: logger.with(additionalMetadata: additionalMetadata),
+        logger: logger.copy(with: additionalMetadata),
         iterations: iterations - 1
     )
     logger.info("I am done")
 }
 
+/// Benchmark function using implicit task-local logger propagation.
+///
+/// This function demonstrates the task-local logger approach where loggers are
+/// propagated implicitly through task-local storage. Each recursive call adds
+/// metadata using Logger.with() without explicit parameter passing.
 @inline(never)
 func implicitLogger(iterations: Int = 100, moreMetadata: Bool = true) {
     if iterations == 0 {
         return
     }
-    let additionalMetadata: Logger.Metadata = if moreMetadata {[
-        "iteration-\(iterations)-key1": "iteration-\(iterations)-value1",
-        "iteration-\(iterations)-key2": "iteration-\(iterations)-value2",
-        "iteration-\(iterations)-key3": "iteration-\(iterations)-value3"
-    ]} else {[
-        "iteration-\(iterations)-key1": "iteration-\(iterations)-value1"
-    ]}
-    GlobalLoggerContext.withTaskLocalLoggerInline(metadata: additionalMetadata) { logger in
-        logger.info("I am a recursive function using task local logger")
-        implicitLogger(iterations: iterations - 1)
-        logger.info("I am done")
+    let additionalMetadata: Logger.Metadata =
+        if moreMetadata {
+            [
+                "iteration-\(iterations)-key1": "iteration-\(iterations)-value1",
+                "iteration-\(iterations)-key2": "iteration-\(iterations)-value2",
+                "iteration-\(iterations)-key3": "iteration-\(iterations)-value3",
+            ]
+        } else {
+            [
+                "iteration-\(iterations)-key1": "iteration-\(iterations)-value1"
+            ]
+        }
+    Logger.with(additionalMetadata: additionalMetadata) {
+        Logger.withExistingContext { logger in
+            logger.info("I am a recursive function using task local logger")
+        }
+        implicitLogger(iterations: iterations - 1, moreMetadata: moreMetadata)
+        Logger.withExistingContext { logger in
+            logger.info("I am done")
+        }
     }
 }
 
