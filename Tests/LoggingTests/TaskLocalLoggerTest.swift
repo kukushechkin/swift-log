@@ -278,7 +278,10 @@ struct TaskLocalLoggerTest {
         let logging = TestLogging()
         let logger = Logger(label: "test", factory: { logging.make(label: $0) })
 
-        await Logger.with(handler: logger.handler) { _ in
+        await Logger.with(
+            additionalMetadata: ["context": "parent"],
+            handler: logger.handler
+        ) { _ in
             await withTaskGroup(of: Void.self) { group in
                 // Task 1
                 group.addTask {
@@ -308,14 +311,18 @@ struct TaskLocalLoggerTest {
         logging.history.assertExist(
             level: .info,
             message: "task 1 message",
-            metadata: ["task": "1"]
+            metadata: ["task": "1", "context": "parent"]
         )
         logging.history.assertExist(
             level: .info,
             message: "task 2 message",
-            metadata: ["task": "2"]
+            metadata: ["task": "2", "context": "parent"]
         )
-        logging.history.assertExist(level: .info, message: "task 3 message")
+        logging.history.assertExist(
+            level: .info,
+            message: "task 3 message",
+            metadata: ["context": "parent"]
+        )
     }
 
     @Test func childTaskInheritsParentContext() async {
