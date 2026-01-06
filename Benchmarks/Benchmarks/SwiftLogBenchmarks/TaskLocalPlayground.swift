@@ -30,7 +30,7 @@ func setupTaskLocalLogger() {
         NoOpLogHandler(label: "NoOpLogHandler_global")
     }
     #endif
-    Logger.$_taskLocalLogger.withValue(logger) {
+    Logger.withTaskLocalLogger(logger) {
         // Logger is now set for this task scope
     }
 }
