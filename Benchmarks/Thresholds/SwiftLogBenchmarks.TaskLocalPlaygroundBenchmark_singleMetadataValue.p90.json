@@ -1,5 +1,5 @@
 {
-  "instructions" : 303300607,
-  "objectAllocCount" : 33921,
-  "wallClock" : 16400383
+  "instructions" : 3620863,
+  "objectAllocCount" : 1000,
+  "wallClock" : 168703
 }
