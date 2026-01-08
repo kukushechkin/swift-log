@@ -1596,6 +1596,9 @@ public struct StreamLogHandler: LogHandler {
 
 /// A no-operation log handler, used when no logging is required
 public struct SwiftLogNoOpLogHandler: LogHandler {
+    private static let lock = Lock()
+    private nonisolated(unsafe) static var hasWarned = false
+
     /// Creates a no-op log handler.
     public init() {}
 
@@ -1621,7 +1624,9 @@ public struct SwiftLogNoOpLogHandler: LogHandler {
         file: String,
         function: String,
         line: UInt
-    ) {}
+    ) {
+        Self.warnOnce()
+    }
 
     /// A proxy that discards every log message that you provide.
     ///
@@ -1645,7 +1650,26 @@ public struct SwiftLogNoOpLogHandler: LogHandler {
         file: String,
         function: String,
         line: UInt
-    ) {}
+    ) {
+        Self.warnOnce()
+    }
+
+    @usableFromInline
+    package static func warnOnce() {
+        lock.withLock {
+            guard !hasWarned else { return }
+            hasWarned = true
+            let stream = StdioOutputStream.stderr
+            stream.write(
+                """
+                warning: SwiftLogNoOpLogHandler is discarding log messages. \
+                This usually means the task-local logger was not configured with a proper handler. \
+                Use Logger.with(handler:) to set up logging context.
+
+                """
+            )
+        }
+    }
 
     /// Add, change, or remove a logging metadata item.
     ///
