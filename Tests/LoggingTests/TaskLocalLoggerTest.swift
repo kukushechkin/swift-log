@@ -513,13 +513,13 @@ struct TaskLocalLoggerTest {
         logging.history.assertNotExist(level: .info, message: "third - should not appear")
     }
 
-    // MARK: - Instance copy() methods
+    // MARK: - Instance with() methods
 
-    @Test func copyWithMetadata() {
+    @Test func withAdditionalMetadata() {
         let logging = TestLogging()
         let logger = Logger(label: "test", factory: { logging.make(label: $0) })
 
-        let copied = logger.copy(with: ["copied": "metadata"])
+        let copied = logger.with(additionalMetadata: ["copied": "metadata"])
 
         copied.info("test message")
 
@@ -530,12 +530,12 @@ struct TaskLocalLoggerTest {
         )
     }
 
-    @Test func copyWithLogLevel() {
+    @Test func withLogLevel() {
         let logging = TestLogging()
         var logger = Logger(label: "test", factory: { logging.make(label: $0) })
         logger.logLevel = .error
 
-        let copied = logger.copy(logLevel: .debug)
+        let copied = logger.with(logLevel: .debug)
 
         copied.debug("should appear")
         logger.debug("should not appear")
@@ -544,12 +544,12 @@ struct TaskLocalLoggerTest {
         logging.history.assertExist(level: .debug, message: "should appear")
     }
 
-    @Test func copyWithHandler() {
+    @Test func withHandler() {
         let logging1 = TestLogging()
         let logging2 = TestLogging()
         let logger = Logger(label: "test", factory: { logging1.make(label: $0) })
 
-        let copied = logger.copy(handler: logging2.make(label: "copied"))
+        let copied = logger.with(handler: logging2.make(label: "copied"))
 
         logger.info("original")
         copied.info("copied")
@@ -561,11 +561,11 @@ struct TaskLocalLoggerTest {
         logging2.history.assertExist(level: .info, message: "copied")
     }
 
-    @Test func copyDoesNotMutateOriginal() {
+    @Test func withDoesNotMutateOriginal() {
         let logging = TestLogging()
         let logger = Logger(label: "test", factory: { logging.make(label: $0) })
 
-        let copied = logger.copy(with: ["key": "value"])
+        let copied = logger.with(additionalMetadata: ["key": "value"])
 
         logger.info("original")
         copied.info("copied")

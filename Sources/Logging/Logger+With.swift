@@ -24,7 +24,7 @@ extension Logger {
     ///   will override existing values for the same keys.
     /// - Returns: A new `Logger` instance with the merged metadata.
     @inlinable
-    public func copy(with additionalMetadata: Logger.Metadata) -> Logger {
+    public func with(additionalMetadata: Logger.Metadata) -> Logger {
         var newLogger = self
         if additionalMetadata.count == 1 {
             newLogger.handler.metadata[additionalMetadata.first!.key] = additionalMetadata.first!.value
@@ -42,7 +42,7 @@ extension Logger {
     /// - Parameter logLevel: The log level to set on the new logger.
     /// - Returns: A new `Logger` instance with the specified log level.
     @inlinable
-    public func copy(logLevel: Logger.Level) -> Logger {
+    public func with(logLevel: Logger.Level) -> Logger {
         var newLogger = self
         newLogger.logLevel = logLevel
         return newLogger
@@ -56,7 +56,7 @@ extension Logger {
     /// - Parameter handler: The log handler to use for the new logger.
     /// - Returns: A new `Logger` instance with the specified handler.
     @inlinable
-    public func copy(handler: any LogHandler) -> Logger {
+    public func with(handler: any LogHandler) -> Logger {
         var newLogger = self
         newLogger.handler = handler
         return newLogger
@@ -72,7 +72,7 @@ extension Logger {
     ///   - logLevel: The log level to set on the new logger.
     /// - Returns: A new `Logger` instance with the specified modifications.
     @inlinable
-    public func copy(with additionalMetadata: Logger.Metadata, logLevel: Logger.Level) -> Logger {
+    public func with(additionalMetadata: Logger.Metadata, logLevel: Logger.Level) -> Logger {
         var newLogger = self
         if additionalMetadata.count == 1 {
             newLogger.handler.metadata[additionalMetadata.first!.key] = additionalMetadata.first!.value
@@ -93,7 +93,7 @@ extension Logger {
     ///   - handler: The log handler to use for the new logger.
     /// - Returns: A new `Logger` instance with the specified modifications.
     @inlinable
-    public func copy(with additionalMetadata: Logger.Metadata, handler: any LogHandler) -> Logger {
+    public func with(additionalMetadata: Logger.Metadata, handler: any LogHandler) -> Logger {
         var newLogger = self
         var newHandler = handler
         if additionalMetadata.count == 1 {
@@ -115,7 +115,7 @@ extension Logger {
     ///   - handler: The log handler to use for the new logger.
     /// - Returns: A new `Logger` instance with the specified modifications.
     @inlinable
-    public func copy(logLevel: Logger.Level, handler: any LogHandler) -> Logger {
+    public func with(logLevel: Logger.Level, handler: any LogHandler) -> Logger {
         var newLogger = self
         var newHandler = handler
         newHandler.logLevel = logLevel
@@ -134,8 +134,8 @@ extension Logger {
     ///   - handler: The log handler to use for the new logger.
     /// - Returns: A new `Logger` instance with the specified modifications.
     @inlinable
-    public func copy(
-        with additionalMetadata: Logger.Metadata,
+    public func with(
+        additionalMetadata: Logger.Metadata,
         logLevel: Logger.Level,
         handler: any LogHandler
     ) -> Logger {
@@ -175,7 +175,7 @@ extension Logger {
         additionalMetadata: Logger.Metadata,
         _ body: (Logger) throws -> R
     ) rethrows -> R {
-        let modifiedLogger = Logger.taskLocalLogger.copy(with: additionalMetadata)
+        let modifiedLogger = Logger.taskLocalLogger.with(additionalMetadata: additionalMetadata)
         return try Logger.withTaskLocalLogger(modifiedLogger) {
             try body(modifiedLogger)
         }
@@ -196,7 +196,7 @@ extension Logger {
         additionalMetadata: Logger.Metadata,
         _ body: (Logger) async throws -> R
     ) async rethrows -> R {
-        let modifiedLogger = Logger.taskLocalLogger.copy(with: additionalMetadata)
+        let modifiedLogger = Logger.taskLocalLogger.with(additionalMetadata: additionalMetadata)
         return try await Logger.withTaskLocalLogger(modifiedLogger) {
             try await body(modifiedLogger)
         }
@@ -217,7 +217,7 @@ extension Logger {
         logLevel: Logger.Level,
         _ body: (Logger) throws -> R
     ) rethrows -> R {
-        let modifiedLogger = Logger.taskLocalLogger.copy(logLevel: logLevel)
+        let modifiedLogger = Logger.taskLocalLogger.with(logLevel: logLevel)
         return try Logger.withTaskLocalLogger(modifiedLogger) {
             try body(modifiedLogger)
         }
@@ -238,7 +238,7 @@ extension Logger {
         logLevel: Logger.Level,
         _ body: (Logger) async throws -> R
     ) async rethrows -> R {
-        let modifiedLogger = Logger.taskLocalLogger.copy(logLevel: logLevel)
+        let modifiedLogger = Logger.taskLocalLogger.with(logLevel: logLevel)
         return try await Logger.withTaskLocalLogger(modifiedLogger) {
             try await body(modifiedLogger)
         }
@@ -259,7 +259,7 @@ extension Logger {
         handler: any LogHandler,
         _ body: (Logger) throws -> R
     ) rethrows -> R {
-        let modifiedLogger = Logger.taskLocalLogger.copy(handler: handler)
+        let modifiedLogger = Logger.taskLocalLogger.with(handler: handler)
         return try Logger.withTaskLocalLogger(modifiedLogger) {
             try body(modifiedLogger)
         }
@@ -280,7 +280,7 @@ extension Logger {
         handler: any LogHandler,
         _ body: (Logger) async throws -> R
     ) async rethrows -> R {
-        let modifiedLogger = Logger.taskLocalLogger.copy(handler: handler)
+        let modifiedLogger = Logger.taskLocalLogger.with(handler: handler)
         return try await Logger.withTaskLocalLogger(modifiedLogger) {
             try await body(modifiedLogger)
         }
@@ -300,7 +300,7 @@ extension Logger {
         logLevel: Logger.Level,
         _ body: (Logger) throws -> R
     ) rethrows -> R {
-        let modifiedLogger = Logger.taskLocalLogger.copy(with: additionalMetadata, logLevel: logLevel)
+        let modifiedLogger = Logger.taskLocalLogger.with(additionalMetadata: additionalMetadata, logLevel: logLevel)
         return try Logger.withTaskLocalLogger(modifiedLogger) {
             try body(modifiedLogger)
         }
@@ -320,7 +320,7 @@ extension Logger {
         logLevel: Logger.Level,
         _ body: (Logger) async throws -> R
     ) async rethrows -> R {
-        let modifiedLogger = Logger.taskLocalLogger.copy(with: additionalMetadata, logLevel: logLevel)
+        let modifiedLogger = Logger.taskLocalLogger.with(additionalMetadata: additionalMetadata, logLevel: logLevel)
         return try await Logger.withTaskLocalLogger(modifiedLogger) {
             try await body(modifiedLogger)
         }
@@ -340,7 +340,7 @@ extension Logger {
         handler: any LogHandler,
         _ body: (Logger) throws -> R
     ) rethrows -> R {
-        let modifiedLogger = Logger.taskLocalLogger.copy(with: additionalMetadata, handler: handler)
+        let modifiedLogger = Logger.taskLocalLogger.with(additionalMetadata: additionalMetadata, handler: handler)
         return try Logger.withTaskLocalLogger(modifiedLogger) {
             try body(modifiedLogger)
         }
@@ -360,7 +360,7 @@ extension Logger {
         handler: any LogHandler,
         _ body: (Logger) async throws -> R
     ) async rethrows -> R {
-        let modifiedLogger = Logger.taskLocalLogger.copy(with: additionalMetadata, handler: handler)
+        let modifiedLogger = Logger.taskLocalLogger.with(additionalMetadata: additionalMetadata, handler: handler)
         return try await Logger.withTaskLocalLogger(modifiedLogger) {
             try await body(modifiedLogger)
         }
@@ -380,7 +380,7 @@ extension Logger {
         handler: any LogHandler,
         _ body: (Logger) throws -> R
     ) rethrows -> R {
-        let modifiedLogger = Logger.taskLocalLogger.copy(logLevel: logLevel, handler: handler)
+        let modifiedLogger = Logger.taskLocalLogger.with(logLevel: logLevel, handler: handler)
         return try Logger.withTaskLocalLogger(modifiedLogger) {
             try body(modifiedLogger)
         }
@@ -400,7 +400,7 @@ extension Logger {
         handler: any LogHandler,
         _ body: (Logger) async throws -> R
     ) async rethrows -> R {
-        let modifiedLogger = Logger.taskLocalLogger.copy(logLevel: logLevel, handler: handler)
+        let modifiedLogger = Logger.taskLocalLogger.with(logLevel: logLevel, handler: handler)
         return try await Logger.withTaskLocalLogger(modifiedLogger) {
             try await body(modifiedLogger)
         }
@@ -422,8 +422,8 @@ extension Logger {
         handler: any LogHandler,
         _ body: (Logger) throws -> R
     ) rethrows -> R {
-        let modifiedLogger = Logger.taskLocalLogger.copy(
-            with: additionalMetadata,
+        let modifiedLogger = Logger.taskLocalLogger.with(
+            additionalMetadata: additionalMetadata,
             logLevel: logLevel,
             handler: handler
         )
@@ -448,8 +448,8 @@ extension Logger {
         handler: any LogHandler,
         _ body: (Logger) async throws -> R
     ) async rethrows -> R {
-        let modifiedLogger = Logger.taskLocalLogger.copy(
-            with: additionalMetadata,
+        let modifiedLogger = Logger.taskLocalLogger.with(
+            additionalMetadata: additionalMetadata,
             logLevel: logLevel,
             handler: handler
         )
