@@ -1881,6 +1881,10 @@ extension Logger {
     /// > Use ``Logger/withExistingContext(_:)`` to access the current task-local logger,
     /// > or ``Logger/with(additionalMetadata:_:)`` to modify it.
     ///
+    /// > Important: Task-local values are **not** inherited by detached tasks created with `Task.detached`.
+    /// > If you need logger context in a detached task, capture the logger explicitly or use structured
+    /// > concurrency (`async let`, `withTaskGroup`, etc.) instead.
+    ///
     /// This property provides access to the logger stored in task-local storage. It initializes a no-op logger
     /// that discards all log messages. Users should explicitly set up a logger with an appropriate handler at
     /// application entry points using ``Logger/with(additionalMetadata:_:)`` to enable actual logging.
@@ -1911,6 +1915,16 @@ extension Logger {
     /// This method provides access to the logger stored in task-local storage, allowing you to extract it
     /// and return a value from the closure.
     ///
+    /// > Important: Task-local values are **not** inherited by detached tasks created with `Task.detached`.
+    /// > If you need logger context in a detached task, capture the logger explicitly:
+    /// > ```swift
+    /// > Logger.withExistingContext { logger in
+    /// >     Task.detached {
+    /// >         logger.info("This works - explicit capture")
+    /// >     }
+    /// > }
+    /// > ```
+    ///
     /// - Parameter body: The closure to execute with the task-local logger.
     /// - Returns: The value returned by the closure.
     @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
@@ -1924,6 +1938,16 @@ extension Logger {
     ///
     /// This method provides access to the logger stored in task-local storage for async operations
     /// that return a value.
+    ///
+    /// > Important: Task-local values are **not** inherited by detached tasks created with `Task.detached`.
+    /// > If you need logger context in a detached task, capture the logger explicitly:
+    /// > ```swift
+    /// > Logger.withExistingContext { logger in
+    /// >     Task.detached {
+    /// >         logger.info("This works - explicit capture")
+    /// >     }
+    /// > }
+    /// > ```
     ///
     /// - Parameter body: The async closure to execute with the task-local logger.
     /// - Returns: The value returned by the closure.
