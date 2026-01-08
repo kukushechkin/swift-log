@@ -161,6 +161,10 @@ extension Logger {
     /// This static method modifies the current task-local logger by merging the provided metadata,
     /// then executes the closure with the modified logger set as the task-local context.
     ///
+    /// > Important: Task-local values are **not** inherited by detached tasks created with `Task.detached`.
+    /// > If you need logger context in a detached task, capture the logger explicitly or use structured
+    /// > concurrency (`async let`, `withTaskGroup`, etc.) instead.
+    ///
     /// - Parameters:
     ///   - additionalMetadata: The metadata dictionary to merge with the current task-local logger's metadata.
     ///   - body: The closure to execute with the modified task-local logger.
