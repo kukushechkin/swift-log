@@ -51,7 +51,7 @@ func explicitLogger(logger: Logger, iterations: Int = 100, moreMetadata: Bool = 
             "iteration-\(iterations)-key1": "iteration-\(iterations)-value1"
         ]
     }
-    let newLogger = logger.copy(with: additionalMetadata)
+    let newLogger = logger.with(additionalMetadata: additionalMetadata)
     newLogger.info("I am a recursive function")
     explicitLogger(
         logger: newLogger,

@@ -12,7 +12,7 @@ The task-local logger API provides:
 
 - **Static `Logger.with()` methods** to set or modify the task-local logger context.
 - **`Logger.withExistingContext()`** to access the current task-local logger (cheap: just TaskLocal property access).
-- **Instance `.copy()` methods** to create modified logger instances without mutation.
+- **Instance `.with()` methods** to create modified logger instances without mutation.
 
 ## Use-case: Request-scoped logging in server applications
 
@@ -184,7 +184,7 @@ Combine explicit logger parameters for hot paths with implicit context for deep 
 ```swift
 func handleRequest(_ request: HTTPRequest) async throws -> HTTPResponse {
     let logger = Logger(label: "server")
-    let requestLogger = logger.copy(with: ["request.id": "\(request.id)"])
+    let requestLogger = logger.with(additionalMetadata: ["request.id": "\(request.id)"])
 
     return try await Logger.with(handler: requestLogger.handler) { logger in
         logger.info("Request received")
@@ -239,5 +239,5 @@ func processValidatedRequest(_ request: ValidatedRequest) async throws -> HTTPRe
 - ``Logger``
 - ``Logger/withExistingContext(_:)``
 - ``Logger/with(additionalMetadata:_:)``
-- ``Logger/copy(with:)``
+- ``Logger/with(additionalMetadata:)``
 - <doc:003-AcceptingLoggers>
