@@ -40,17 +40,18 @@ func explicitLogger(logger: Logger, iterations: Int = 100, moreMetadata: Bool = 
     if iterations == 0 {
         return
     }
-    let additionalMetadata: Logger.Metadata = if moreMetadata {
-        [
-            "iteration-\(iterations)-key1": "iteration-\(iterations)-value1",
-            "iteration-\(iterations)-key2": "iteration-\(iterations)-value2",
-            "iteration-\(iterations)-key3": "iteration-\(iterations)-value3",
-        ]
-    } else {
-        [
-            "iteration-\(iterations)-key1": "iteration-\(iterations)-value1"
-        ]
-    }
+    let additionalMetadata: Logger.Metadata =
+        if moreMetadata {
+            [
+                "iteration-\(iterations)-key1": "iteration-\(iterations)-value1",
+                "iteration-\(iterations)-key2": "iteration-\(iterations)-value2",
+                "iteration-\(iterations)-key3": "iteration-\(iterations)-value3",
+            ]
+        } else {
+            [
+                "iteration-\(iterations)-key1": "iteration-\(iterations)-value1"
+            ]
+        }
     let newLogger = logger.with(additionalMetadata: additionalMetadata)
     newLogger.info("I am a recursive function")
     explicitLogger(
