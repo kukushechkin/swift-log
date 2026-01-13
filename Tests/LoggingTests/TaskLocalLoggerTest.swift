@@ -25,14 +25,14 @@ import Testing
 struct TaskLocalLoggerTest {
     // MARK: - Basic task-local access
 
-    @Test func withExistingContextProvidesDefaultLogger() {
-        // Test that withExistingContext provides a logger even when no context is set
-        Logger.withExistingContext { logger in
-            #expect(logger.label == "task-local")
+    @Test func withCurrentProvidesDefaultLogger() {
+        // Test that withCurrent provides a logger even when no context is set
+        Logger.withCurrent { logger in
+            #expect(logger.label == "")
         }
     }
 
-    @Test func withExistingContextSyncVoid() {
+    @Test func withCurrentSyncVoid() {
         let logging = TestLogging()
         let logger = Logger(label: "test", factory: { logging.make(label: $0) })
 
@@ -50,7 +50,7 @@ struct TaskLocalLoggerTest {
         )
     }
 
-    @Test func withExistingContextSyncReturning() {
+    @Test func withCurrentSyncReturning() {
         let logging = TestLogging()
         let logger = Logger(label: "test", factory: { logging.make(label: $0) })
 
@@ -66,7 +66,7 @@ struct TaskLocalLoggerTest {
         logging.history.assertExist(level: .info, message: "computing")
     }
 
-    @Test func withExistingContextAsyncVoid() async {
+    @Test func withCurrentAsyncVoid() async {
         let logging = TestLogging()
         let logger = Logger(label: "test", factory: { logging.make(label: $0) })
 
@@ -84,7 +84,7 @@ struct TaskLocalLoggerTest {
         )
     }
 
-    @Test func withExistingContextAsyncReturning() async {
+    @Test func withCurrentAsyncReturning() async {
         let logging = TestLogging()
         let logger = Logger(label: "test", factory: { logging.make(label: $0) })
 
@@ -299,7 +299,7 @@ struct TaskLocalLoggerTest {
 
                 // Task 3
                 group.addTask {
-                    Logger.withExistingContext { logger in
+                    Logger.withCurrent { logger in
                         // No context set - uses parent task's logger
                         logger.info("task 3 message")
                     }
@@ -335,7 +335,7 @@ struct TaskLocalLoggerTest {
 
                 // Create child task
                 await Task {
-                    Logger.withExistingContext { logger in
+                    Logger.withCurrent { logger in
                         logger.info("child message")
                     }
                 }.value
@@ -427,19 +427,19 @@ struct TaskLocalLoggerTest {
         let logger = Logger(label: "test", factory: { logging.make(label: $0) })
 
         func innerAsync() async {
-            Logger.withExistingContext { logger in
+            Logger.withCurrent { logger in
                 logger.info("inner function")
             }
         }
 
         func outerAsync() async {
-            Logger.withExistingContext { logger in
+            Logger.withCurrent { logger in
                 logger.info("outer before")
             }
 
             await innerAsync()
 
-            Logger.withExistingContext { logger in
+            Logger.withCurrent { logger in
                 logger.info("outer after")
             }
         }
@@ -629,7 +629,7 @@ struct TaskLocalLoggerTest {
         // Library code that doesn't require logger parameter
         struct DatabaseClient {
             func query(_ sql: String) {
-                Logger.withExistingContext { logger in
+                Logger.withCurrent { logger in
                     logger.debug("Executing query", metadata: ["sql": "\(sql)"])
                 }
             }

@@ -1898,23 +1898,24 @@ private final class WarnOnceBox: @unchecked Sendable {
 extension Logger {
     /// Task-local storage for implicit logger context propagation.
     ///
-    /// This storage enables the static `Logger.with()` methods and `Logger.withExistingContext()` to work
+    /// This storage enables the static `Logger.with()` methods, `Logger.current`, and `Logger.withCurrent()` to work
     /// without requiring explicit logger parameters throughout the call stack.
     ///
     /// > Warning: This property is implementation detail and should not be accessed directly.
-    /// > Use ``Logger/withExistingContext(_:)`` to access the current task-local logger,
+    /// > Use ``Logger/current`` or ``Logger/withCurrent(_:)`` to access the current task-local logger,
     /// > or ``Logger/with(additionalMetadata:_:)`` to modify it.
     ///
     /// > Important: Task-local values are **not** inherited by detached tasks created with `Task.detached`.
     /// > If you need logger context in a detached task, capture the logger explicitly or use structured
     /// > concurrency (`async let`, `withTaskGroup`, etc.) instead.
     ///
-    /// This property provides access to the logger stored in task-local storage. It initializes a no-op logger
-    /// that discards all log messages. Users should explicitly set up a logger with an appropriate handler at
-    /// application entry points using ``Logger/with(additionalMetadata:_:)`` to enable actual logging.
+    /// This property provides access to the logger stored in task-local storage. It initializes to nil,
+    /// and when accessed without prior setup, returns a no-op logger that discards all log messages.
+    /// Users should explicitly set up a logger with an appropriate handler at application entry points
+    /// using ``Logger/with(label:handler:logLevel:_:)`` or ``Logger/with(additionalMetadata:_:)`` to enable actual logging.
     @usableFromInline
     @TaskLocal
-    static var taskLocalLogger: Logger = Logger(label: "task-local") { _ in SwiftLogNoOpLogHandler() }
+    static var taskLocalLogger: Logger?
 
     @discardableResult
     @usableFromInline
@@ -1934,15 +1935,41 @@ extension Logger {
         try Self.$taskLocalLogger.withValue(value, operation: operation)
     }
 
+    /// The current task-local logger.
+    ///
+    /// This property provides direct access to the logger stored in task-local storage.
+    /// Use this when you need quick access to the logger without a closure.
+    ///
+    /// If no task-local logger has been set up, this returns a default no-op logger.
+    /// Use ``Logger/with(label:handler:logLevel:_:)`` to initialize the task-local logger.
+    ///
+    /// > Important: Task-local values are **not** inherited by detached tasks created with `Task.detached`.
+    /// > If you need logger context in a detached task, capture the logger explicitly.
+    ///
+    /// Example:
+    /// ```swift
+    /// Logger.current.info("Quick logging")
+    /// ```
+    ///
+    /// For working with the logger in a closure that returns a value, use ``withCurrent(_:)`` instead.
+    @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
+    @inlinable
+    public static var current: Logger {
+        Self.taskLocalLogger ?? Logger(label: "") { _ in SwiftLogNoOpLogHandler() }
+    }
+
     /// Execute a closure with access to the current task-local logger.
     ///
     /// This method provides access to the logger stored in task-local storage, allowing you to extract it
     /// and return a value from the closure.
     ///
+    /// If no task-local logger has been set up, this provides a default no-op logger.
+    /// Use ``Logger/with(label:handler:logLevel:_:)`` to initialize the task-local logger.
+    ///
     /// > Important: Task-local values are **not** inherited by detached tasks created with `Task.detached`.
     /// > If you need logger context in a detached task, capture the logger explicitly:
     /// > ```swift
-    /// > Logger.withExistingContext { logger in
+    /// > Logger.withCurrent { logger in
     /// >     Task.detached {
     /// >         logger.info("This works - explicit capture")
     /// >     }
@@ -1954,8 +1981,8 @@ extension Logger {
     @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
     @discardableResult
     @inlinable
-    public static func withExistingContext<R>(_ body: (Logger) -> R) -> R {
-        body(Self.taskLocalLogger)
+    public static func withCurrent<R>(_ body: (Logger) -> R) -> R {
+        body(Self.taskLocalLogger ?? Logger(label: "") { _ in SwiftLogNoOpLogHandler() })
     }
 
     /// Execute an async closure with access to the current task-local logger.
@@ -1963,10 +1990,13 @@ extension Logger {
     /// This method provides access to the logger stored in task-local storage for async operations
     /// that return a value.
     ///
+    /// If no task-local logger has been set up, this provides a default no-op logger.
+    /// Use ``Logger/with(label:handler:logLevel:_:)`` to initialize the task-local logger.
+    ///
     /// > Important: Task-local values are **not** inherited by detached tasks created with `Task.detached`.
     /// > If you need logger context in a detached task, capture the logger explicitly:
     /// > ```swift
-    /// > Logger.withExistingContext { logger in
+    /// > Logger.withCurrent { logger in
     /// >     Task.detached {
     /// >         logger.info("This works - explicit capture")
     /// >     }
@@ -1978,8 +2008,8 @@ extension Logger {
     @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
     @discardableResult
     @inlinable
-    public static func withExistingContext<R>(_ body: (Logger) async -> R) async -> R {
-        await body(Self.taskLocalLogger)
+    public static func withCurrent<R>(_ body: (Logger) async -> R) async -> R {
+        await body(Self.taskLocalLogger ?? Logger(label: "") { _ in SwiftLogNoOpLogHandler() })
     }
 }
 
