@@ -1,6 +1,6 @@
-# SLG-0003: Task-local logger context propagation
+# SLG-0003: Task-local logger with automatic metadata propagation
 
-Propagate logger context automatically through Swift structured concurrency without explicit parameters.
+Accumulate structured logging metadata across async call stacks using task-local storage.
 
 ## Overview
 
@@ -12,44 +12,95 @@ Propagate logger context automatically through Swift structured concurrency with
 
 ### Introduction
 
-Add task-local logger storage to propagate context through async call stacks without explicit parameter passing.
+Add task-local logger storage to enable progressive metadata accumulation without explicit logger parameters. This proposal focuses on solving metadata propagation challenges in applications and libraries.
 
 ### Motivation
 
-Async applications require threading loggers through every function to accumulate structured metadata:
+Modern Swift applications face two primary challenges when trying to maintain rich, contextual logging with accumulated metadata.
+
+#### Problem 1: Metadata propagation throughout the application flow
+
+Applications need to accumulate structured metadata as execution flows through layers:
 
 ```swift
-func handleRequest(_ request: HTTPRequest, logger: Logger) async throws -> HTTPResponse {
-    let logger = logger.with(additionalMetadata: ["request.id": "\(request.id)"])
-    logger.info("Handling request")
+// Layer 1: HTTP handler adds request context
+func handleHTTPRequest(_ request: HTTPRequest, logger: Logger) async throws {
+    var logger = logger
+    logger[metadataKey: "request.id"] = "\(request.id)"
+    try await processBusinessLogic(request, logger: logger)
+}
+
+// Layer 2: Business logic adds user context
+func processBusinessLogic(_ request: HTTPRequest, logger: Logger) async throws {
     let user = try await authenticate(request, logger: logger)
-    return try await processRequest(request, user: user, logger: logger)
+    var logger = logger
+    logger[metadataKey: "user.id"] = "\(user.id)"
+    try await accessDatabase(user, logger: logger)
 }
 
-func authenticate(_ request: HTTPRequest, logger: Logger) async throws -> User {
-    let logger = logger.with(additionalMetadata: ["auth.method": "token"])
-    logger.debug("Authenticating")
+// Layer 3: Database layer wants request.id, user.id, AND table context
+func accessDatabase(_ user: User, logger: Logger) async throws {
+    var logger = logger
+    logger[metadataKey: "table"] = "users"
+    logger.info("Query")
 }
 ```
 
-This pollutes APIs and complicates progressive metadata accumulation. A typical HTTP request flows through 15-20 functions—all need logger parameters to preserve context.
+Every layer must accept a logger parameter, mutate it to add metadata, and pass it to the next layer. This is verbose and error-prone.
 
-**Alternative: Ad-hoc logger creation** is equally problematic:
+#### Problem 2: Library APIs polluted by logging and lost metadata context
+
+Libraries face a dilemma with three unsatisfying options:
+
+**Option A: Pollute public APIs**
 
 ```swift
-func authenticate(_ request: HTTPRequest) async throws -> User {
-    let logger = Logger(label: "auth")  // Uses LoggingSystem.bootstrap factory
-    logger.debug("Authenticating")  // Lost all request context!
+public struct DatabaseClient {
+    public func query(_ sql: String, logger: Logger) async throws -> [Row] {
+        var logger = logger
+        logger[metadataKey: "sql"] = "\(sql)"
+        logger.debug("Query")
+        return try await performQuery(sql, logger: logger)
+    }
+
+    private func performQuery(_ sql: String, logger: Logger) async throws -> [Row] {
+        var logger = logger
+        logger[metadataKey: "step"] = "validation"
+        try await checkFraudRules(logger: logger)
+    }
 }
 ```
 
-This couples code to global `LoggingSystem.bootstrap()` state, making tests interfere when running concurrently. Each test must either bootstrap differently (global mutation) or accept the globally configured handler. Worse, it loses accumulated metadata from the calling context.
+**Option B: Create ad-hoc loggers and lose context**
+
+```swift
+public struct DatabaseClient {
+    public func query(_ sql: String) async throws -> [Row] {
+        let logger = Logger(label: "database")
+        logger.debug("Query", metadata: ["sql": "\(sql)"])
+        // Lost: request.id, user.id, trace.id, etc.
+        return try await performQuery(sql)
+    }
+}
+```
+
+**Option C: Don't log at all**
+
+```swift
+public struct DatabaseClient {
+    public func query(_ sql: String) async throws -> [Row] {
+        // No observability into library behavior
+        return try await performQuery(sql)
+    }
+}
+```
 
 ### Proposed solution
 
-Use Swift's `@TaskLocal` for implicit propagation:
+Use Swift's `@TaskLocal` storage to automatically propagate logger with accumulated metadata:
 
 ```swift
+// Application code - no logger parameters needed
 func handleRequest(_ request: HTTPRequest) async throws -> HTTPResponse {
     try await Logger.with(additionalMetadata: ["request.id": "\(request.id)"]) { logger in
         logger.info("Handling request")
@@ -59,13 +110,47 @@ func handleRequest(_ request: HTTPRequest) async throws -> HTTPResponse {
 }
 
 func authenticate(_ request: HTTPRequest) async throws -> User {
-    Logger.withExistingContext { logger in
-        logger.debug("Authenticating")  // Has request.id!
+    Logger.current.debug("Authenticating")  // Has request.id automatically!
+}
+```
+
+**Library code - clean APIs, full context:**
+
+```swift
+public struct DatabaseClient {
+    // Public API has no logger parameter
+    public func query(_ sql: String) async throws -> [Row] {
+        // Logs with ALL accumulated parent metadata (request.id, user.id, etc.)
+        Logger.current.debug("Query", metadata: ["sql": "\(sql)"])
+        return try await performQuery(sql)
+    }
+
+    private func performQuery(_ sql: String) async throws -> [Row] {
+        // Internal functions also have full context
+        Logger.current.trace("Opening connection")
+        // ...
     }
 }
 ```
 
-Child tasks inherit parent context automatically. Libraries can log without logger parameters.
+**Progressive metadata accumulation:**
+
+```swift
+Logger.with(additionalMetadata: ["request.id": "\(request.id)"]) { _ in
+    // All code here has request.id
+
+    Logger.with(additionalMetadata: ["user.id": "\(user.id)"]) { _ in
+        // All code here has BOTH request.id AND user.id
+
+        Logger.with(additionalMetadata: ["operation": "payment"]) { _ in
+            // All code here has request.id, user.id, AND operation
+            Logger.current.info("Processing")  // All metadata automatically included
+        }
+    }
+}
+```
+
+Child tasks inherit parent context automatically through Swift's structured concurrency.
 
 ### Detailed design
 
@@ -73,223 +158,97 @@ Child tasks inherit parent context automatically. Libraries can log without logg
 
 ```swift
 // Static methods - modify task-local context
-@available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
 extension Logger {
-    // Single-parameter modifications
-    @discardableResult
-    @inlinable
+    // Access current task-local logger
+    public static var current: Logger
+
+    public static func withCurrent<R>(_ body: (Logger) -> R) -> R
+
+    public static func withCurrent<R>(_ body: (Logger) async -> R) async -> R
+
+    // Initial task-local logger setup
+    public static func with<R>(
+        label: String,
+        handler: LogHandler,
+        logLevel: Logger.Level,
+        _ body: (Logger) throws -> R
+    ) rethrows -> R
+
+    public static func with<R>(
+        label: String,
+        handler: LogHandler,
+        logLevel: Logger.Level,
+        _ body: (Logger) async throws -> R
+    ) async rethrows -> R
+
+    // Metadata modification
     public static func with<R>(
         additionalMetadata: Logger.Metadata,
         _ body: (Logger) throws -> R
     ) rethrows -> R
 
-    @discardableResult
-    @inlinable
     public static func with<R>(
         additionalMetadata: Logger.Metadata,
         _ body: (Logger) async throws -> R
     ) async rethrows -> R
-
-    @discardableResult
-    @inlinable
-    public static func with<R>(
-        logLevel: Logger.Level,
-        _ body: (Logger) throws -> R
-    ) rethrows -> R
-
-    @discardableResult
-    @inlinable
-    public static func with<R>(
-        logLevel: Logger.Level,
-        _ body: (Logger) async throws -> R
-    ) async rethrows -> R
-
-    @discardableResult
-    @inlinable
-    public static func with<R>(
-        handler: any LogHandler,
-        _ body: (Logger) throws -> R
-    ) rethrows -> R
-
-    @discardableResult
-    @inlinable
-    public static func with<R>(
-        handler: any LogHandler,
-        _ body: (Logger) async throws -> R
-    ) async rethrows -> R
-
-    // Combined parameter modifications
-    @discardableResult
-    @inlinable
-    public static func with<R>(
-        additionalMetadata: Logger.Metadata,
-        logLevel: Logger.Level,
-        _ body: (Logger) throws -> R
-    ) rethrows -> R
-
-    @discardableResult
-    @inlinable
-    public static func with<R>(
-        additionalMetadata: Logger.Metadata,
-        logLevel: Logger.Level,
-        _ body: (Logger) async throws -> R
-    ) async rethrows -> R
-
-    @discardableResult
-    @inlinable
-    public static func with<R>(
-        additionalMetadata: Logger.Metadata,
-        handler: any LogHandler,
-        _ body: (Logger) throws -> R
-    ) rethrows -> R
-
-    @discardableResult
-    @inlinable
-    public static func with<R>(
-        additionalMetadata: Logger.Metadata,
-        handler: any LogHandler,
-        _ body: (Logger) async throws -> R
-    ) async rethrows -> R
-
-    @discardableResult
-    @inlinable
-    public static func with<R>(
-        logLevel: Logger.Level,
-        handler: any LogHandler,
-        _ body: (Logger) throws -> R
-    ) rethrows -> R
-
-    @discardableResult
-    @inlinable
-    public static func with<R>(
-        logLevel: Logger.Level,
-        handler: any LogHandler,
-        _ body: (Logger) async throws -> R
-    ) async rethrows -> R
-
-    @discardableResult
-    @inlinable
-    public static func with<R>(
-        additionalMetadata: Logger.Metadata,
-        logLevel: Logger.Level,
-        handler: any LogHandler,
-        _ body: (Logger) throws -> R
-    ) rethrows -> R
-
-    @discardableResult
-    @inlinable
-    public static func with<R>(
-        additionalMetadata: Logger.Metadata,
-        logLevel: Logger.Level,
-        handler: any LogHandler,
-        _ body: (Logger) async throws -> R
-    ) async rethrows -> R
-
-    // Access existing context
-    @discardableResult
-    @inlinable
-    public static func withExistingContext<R>(_ body: (Logger) -> R) -> R
-
-    @discardableResult
-    @inlinable
-    public static func withExistingContext<R>(_ body: (Logger) async -> R) async -> R
 }
 
 // Instance methods - create modified loggers
 extension Logger {
-    @inlinable
     public func with(additionalMetadata: Logger.Metadata) -> Logger
-
-    @inlinable
-    public func with(logLevel: Logger.Level) -> Logger
-
-    @inlinable
-    public func with(handler: any LogHandler) -> Logger
-
-    @inlinable
-    public func with(additionalMetadata: Logger.Metadata, logLevel: Logger.Level) -> Logger
-
-    @inlinable
-    public func with(additionalMetadata: Logger.Metadata, handler: any LogHandler) -> Logger
-
-    @inlinable
-    public func with(logLevel: Logger.Level, handler: any LogHandler) -> Logger
-
-    @inlinable
-    public func with(
-        additionalMetadata: Logger.Metadata,
-        logLevel: Logger.Level,
-        handler: any LogHandler
-    ) -> Logger
 }
 ```
 
-**Implementation notes:**
+### Performance considerations
 
-All methods are `@inlinable` for zero-cost abstraction. Internal storage uses `@TaskLocal` with `SwiftLogNoOpLogHandler` default (decoupled from `LoggingSystem.bootstrap()`).
+Task-local storage access has runtime overhead compared to explicit parameter passing:
 
-Instance `with()` methods optimize for single-key metadata and use `reserveCapacity()` for multi-key merges. Named `with()` not `copy()` to follow Swift functional conventions (see `Optional.map`, `Result.map`).
+1. **`Logger.current`** - Performs task-local lookup on each access.
+2. **`Logger.withCurrent { logger in }`** - Single lookup with closure-captured logger.
+
+**When to use each?**
+
+- Use `Logger.current` for occasional logging where convenience matters most.
+- Use `Logger.withCurrent { }` in performance-sensitive code with many log calls.
+- Use explicit parameter passing in tight loops if profiling identifies task-local access as a bottleneck.
+
+In tight loops with many log calls, `Logger.current` overhead accumulates. `Logger.withCurrent { }` performs the lookup once and captures the logger, making repeated accesses more efficient.
 
 ### API stability
 
-Purely additive. No changes to existing `Logger` users or `LogHandler` implementations. All APIs are `@inlinable` (no ABI impact).
+Purely additive. No changes to existing `Logger` users or `LogHandler` implementations. Users must adopt the new task-local APIs to benefit. Existing ad-hoc loggers will keep losing parent metadata.
 
 ### Future directions
 
-- Integration with distributed tracing (trace/span ID propagation)
-- Combine with `MetadataProvider` (SLG-0001) for automatic context injection
+- Add `.with(handler:)`, `.with(logLevel:)` and their combinations to allow full control over the TaskLocal logger instance.
 
 ### Alternatives considered
 
-**Public `taskLocalLogger` property:** Rejected—exposes implementation detail, allows misuse.
+#### Task-local metadata dictionary instead of task-local logger
 
-**Use `LoggingSystem.factory` as default:** Rejected—couples task-local to global bootstrap.
+An alternative approach would make only the metadata dictionary task-local:
 
-**Builder pattern:** Rejected—adds complexity, harder to inline, verbose for common case.
-
-**Named `copy()` not `with()`:** Rejected—violates Swift API guidelines, no stdlib precedent.
-
-## Usage Examples
-
-**Progressive context accumulation:**
 ```swift
-func handleRequest(_ request: HTTPRequest) async throws -> HTTPResponse {
-    try await Logger.with(additionalMetadata: ["request.id": "\(request.id)"]) { logger in
-        logger.info("Request received")
-        let user = try await authenticate(request)
-
-        return try await Logger.with(additionalMetadata: ["user.id": "\(user.id)"]) { logger in
-            logger.info("User authenticated")
-            return try await processRequest(request, user)
-        }
-    }
-}
-
-func processRequest(_ request: HTTPRequest, user: User) async throws -> HTTPResponse {
-    Logger.withExistingContext { logger in
-        logger.debug("Processing")  // Has request.id AND user.id
-    }
+// Hypothetical alternative API
+Logger.withTaskLocalMetadata(["request.id": "\(request.id)"]) {
+    // All Logger instances automatically merge task-local metadata
+    let logger = Logger(label: "database")  // Ad-hoc logger now gets parent metadata!
+    logger.info("Query")  // Has request.id from task-local storage
 }
 ```
 
-**Library logging without coupling:**
-```swift
-public struct DatabaseClient {
-    public func query(_ sql: String) async throws -> [Row] {
-        Logger.withExistingContext { logger in
-            logger.debug("Query", metadata: ["sql": "\(sql)"])
-        }
-        return try await performQuery(sql)
-    }
-}
-```
+This would allow ad-hoc logger creation while preserving parent metadata.
 
-**Testing:**
-```swift
-@Test func test() async throws {
-    let testLogger = Logger(label: "test") { TestHandler() }
-    await Logger.with(handler: testLogger.handler) {
-        await handleRequest(mockRequest)
-    }
-}
-```
+**Why this was rejected:**
+
+1. **Semantically confusing**: Decouples logger from its metadata. `Logger(label: "foo")` would have different metadata depending on whether it's inside a task-local scope, making logger metadata unpredictable.
+
+2. **Changes default behavior**: All existing logger creation suddenly merges invisible metadata, which is a breaking semantic change affecting all code.
+
+3. **Overlaps with swift-distributed-tracing**: Swift's distributed tracing already provides task-local propagation for tracing contexts. Having two competing task-local metadata systems creates confusion about which to use.
+
+The proposed solution is more explicit: library authors consciously adopt `Logger.current`, making the behavior clear and intentional.
+
+#### Public `taskLocalLogger` property
+
+Rejected—exposes implementation detail, more verbose.
