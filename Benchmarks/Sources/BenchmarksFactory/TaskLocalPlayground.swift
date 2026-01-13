@@ -28,13 +28,8 @@ func makeBenchmarksLogger() -> Logger {
 
 let benchmarksLogger = makeBenchmarksLogger()
 
-// MARK: - Payload functions
+// MARK: - Explicit logger passing functions
 
-/// Benchmark function using explicit logger parameter passing.
-///
-/// This function demonstrates the traditional approach of explicitly passing
-/// logger instances through the call stack. Each recursive call receives a logger
-/// with accumulated metadata.
 @inline(never)
 func explicitLogger(logger: Logger, iterations: Int = 100, moreMetadata: Bool = true) {
     if iterations == 0 {
@@ -62,11 +57,52 @@ func explicitLogger(logger: Logger, iterations: Int = 100, moreMetadata: Bool = 
     newLogger.info("I am done")
 }
 
-/// Benchmark function using implicit task-local logger propagation.
-///
-/// This function demonstrates the task-local logger approach where loggers are
-/// propagated implicitly through task-local storage. Each recursive call adds
-/// metadata using Logger.with() without explicit parameter passing.
+@inline(never)
+func explicitLoggerNoExtraMetadataWithTaskGroup(logger: Logger, iterations: Int = 100) async {
+    if iterations == 0 {
+        return
+    }
+    await withTaskGroup(of: Void.self) { group in
+        group.addTask {
+            logger.info("I am a recursive function")
+            await explicitLoggerNoExtraMetadataWithTaskGroup(
+                logger: logger,
+                iterations: iterations - 1
+            )
+            logger.info("I am done")
+        }
+    }
+}
+
+@inline(never)
+func explicitLoggerNoExtraMetadata(logger: Logger, iterations: Int = 100) {
+    if iterations == 0 {
+        return
+    }
+    logger.info("I am a recursive function")
+    explicitLoggerNoExtraMetadata(
+        logger: logger,
+        iterations: iterations - 1
+    )
+    logger.info("I am done")
+}
+
+@inline(never)
+func explicitLoggerNoExtraMetadataManyLogs(logger: Logger, iterations: Int = 100) {
+    if iterations == 0 {
+        return
+    }
+    for _ in 0...1 {
+        logger.info("I am a log function")
+    }
+    explicitLoggerNoExtraMetadataManyLogs(
+        logger: logger,
+        iterations: iterations - 1
+    )
+}
+
+// MARK: - Implicit logger passing functions
+
 @inline(never)
 func implicitLogger(iterations: Int = 100, moreMetadata: Bool = true) {
     if iterations == 0 {
@@ -89,6 +125,58 @@ func implicitLogger(iterations: Int = 100, moreMetadata: Bool = true) {
         implicitLogger(iterations: iterations - 1, moreMetadata: moreMetadata)
         logger.info("I am done")
     }
+}
+
+@inline(never)
+func implicitLoggerNoExtraMetadataWithTaskGroup(iterations: Int = 100) async {
+    if iterations == 0 {
+        return
+    }
+    await withTaskGroup(of: Void.self) { group in
+        group.addTask {
+            await Logger.withCurrent { logger in
+                logger.info("I am a recursive function using task local logger")
+                await implicitLoggerNoExtraMetadataWithTaskGroup(iterations: iterations - 1)
+                logger.info("I am done")
+            }
+        }
+    }
+}
+
+@inline(never)
+func implicitLoggerNoExtraMetadata(iterations: Int = 100) {
+    if iterations == 0 {
+        return
+    }
+    Logger.withCurrent { logger in
+        logger.info("I am a recursive function using task local logger")
+        implicitLoggerNoExtraMetadata(iterations: iterations - 1)
+        logger.info("I am done")
+    }
+}
+
+@inline(never)
+func implicitLoggerNoExtraMetadataManyLogsClosure(iterations: Int = 100) {
+    if iterations == 0 {
+        return
+    }
+    Logger.withCurrent { logger in
+        for _ in 0...1 {
+            logger.info("I am a log function")
+        }
+        implicitLoggerNoExtraMetadataManyLogsClosure(iterations: iterations - 1)
+    }
+}
+
+@inline(never)
+func implicitLoggerNoExtraMetadataManyLogsCurrent(iterations: Int = 100) {
+    if iterations == 0 {
+        return
+    }
+    for _ in 0...1 {
+        Logger.current.info("I am a log function")
+    }
+    implicitLoggerNoExtraMetadataManyLogsCurrent(iterations: iterations - 1)
 }
 
 /// MARK: - benchmarking functions
@@ -125,6 +213,42 @@ func benchmarkExplicitLoggerPropagation(_ iterations: Int, _ metrics: [Benchmark
     ) { benchmark in
         explicitLogger(logger: benchmarksLogger, moreMetadata: false)
     }
+    Benchmark(
+        "TaskLocalPlaygroundBenchmark_noExtraMetadataWithTaskGroup",
+        configuration: .init(
+            metrics: metrics,
+            maxIterations: iterations
+        )
+    ) { benchmark in
+        await explicitLoggerNoExtraMetadataWithTaskGroup(logger: benchmarksLogger)
+    }
+    Benchmark(
+        "TaskLocalPlaygroundBenchmark_noExtraMetadata",
+        configuration: .init(
+            metrics: metrics,
+            maxIterations: iterations
+        )
+    ) { benchmark in
+        explicitLoggerNoExtraMetadata(logger: benchmarksLogger)
+    }
+    Benchmark(
+        "TaskLocalPlaygroundBenchmark_noExtraMetadata_manyLogs",
+        configuration: .init(
+            metrics: metrics,
+            maxIterations: iterations
+        )
+    ) { benchmark in
+        explicitLoggerNoExtraMetadataManyLogs(logger: benchmarksLogger)
+    }
+    Benchmark(
+        "TaskLocalPlaygroundBenchmark_noExtraMetadata_manyLogsCurrent",
+        configuration: .init(
+            metrics: metrics,
+            maxIterations: iterations
+        )
+    ) { benchmark in
+        explicitLoggerNoExtraMetadataManyLogs(logger: benchmarksLogger)
+    }
 }
 
 func benchmarkImplicitTaskLocalLoggerPropagation(_ iterations: Int, _ metrics: [BenchmarkMetric]) {
@@ -151,6 +275,58 @@ func benchmarkImplicitTaskLocalLoggerPropagation(_ iterations: Int, _ metrics: [
         Logger.with(handler: benchmarksLogger.handler) { _ in
             benchmark.startMeasurement()
             implicitLogger(moreMetadata: false)
+            benchmark.stopMeasurement()
+        }
+    }
+    Benchmark(
+        "TaskLocalPlaygroundBenchmark_noExtraMetadataWithTaskGroup",
+        configuration: .init(
+            metrics: metrics,
+            maxIterations: iterations
+        )
+    ) { benchmark in
+        await Logger.with(handler: benchmarksLogger.handler) { _ in
+            benchmark.startMeasurement()
+            await implicitLoggerNoExtraMetadataWithTaskGroup()
+            benchmark.stopMeasurement()
+        }
+    }
+    Benchmark(
+        "TaskLocalPlaygroundBenchmark_noExtraMetadata",
+        configuration: .init(
+            metrics: metrics,
+            maxIterations: iterations
+        )
+    ) { benchmark in
+        Logger.with(handler: benchmarksLogger.handler) { _ in
+            benchmark.startMeasurement()
+            implicitLoggerNoExtraMetadata()
+            benchmark.stopMeasurement()
+        }
+    }
+    Benchmark(
+        "TaskLocalPlaygroundBenchmark_noExtraMetadata_manyLogs",
+        configuration: .init(
+            metrics: metrics,
+            maxIterations: iterations
+        )
+    ) { benchmark in
+        Logger.with(handler: benchmarksLogger.handler) { _ in
+            benchmark.startMeasurement()
+            implicitLoggerNoExtraMetadataManyLogsClosure()
+            benchmark.stopMeasurement()
+        }
+    }
+    Benchmark(
+        "TaskLocalPlaygroundBenchmark_noExtraMetadata_manyLogsCurrent",
+        configuration: .init(
+            metrics: metrics,
+            maxIterations: iterations
+        )
+    ) { benchmark in
+        Logger.with(handler: benchmarksLogger.handler) { _ in
+            benchmark.startMeasurement()
+            implicitLoggerNoExtraMetadataManyLogsCurrent()
             benchmark.stopMeasurement()
         }
     }
