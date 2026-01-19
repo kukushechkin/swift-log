@@ -1955,7 +1955,10 @@ extension Logger {
     @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
     @inlinable
     public static var current: Logger {
-        Self.taskLocalLogger ?? Logger(label: "") { _ in SwiftLogNoOpLogHandler() }
+        // TODO: non-empty label
+        // TODO: to make adoption of .current easier, get the global bootstrapped logger, print that a global logger was used; this should be spelled out in the proposal
+        // TODO: NoOp should never be constructed explicitly, let global bootstrap to handle it, give it a "misconfigured" label
+        Self.taskLocalLogger ?? Logger(label: "") // { _ in SwiftLogNoOpLogHandler() }
     }
 
     /// Execute a closure with access to the current task-local logger.
