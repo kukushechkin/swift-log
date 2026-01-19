@@ -33,134 +33,17 @@ extension Logger {
         }
         return newLogger
     }
-
-    /// Create a new logger with a different log level.
-    ///
-    /// This method returns a new logger instance with the specified log level.
-    /// The original logger is not modified.
-    ///
-    /// - Parameter logLevel: The log level to set on the new logger.
-    /// - Returns: A new `Logger` instance with the specified log level.
-    @usableFromInline
-    package func with(logLevel: Logger.Level) -> Logger {
-        var newLogger = self
-        newLogger.logLevel = logLevel
-        return newLogger
-    }
-
-    /// Create a new logger with a different log handler.
-    ///
-    /// This method returns a new logger instance with the specified log handler.
-    /// The original logger is not modified.
-    ///
-    /// - Parameter handler: The log handler to use for the new logger.
-    /// - Returns: A new `Logger` instance with the specified handler.
-    @usableFromInline
-    package func with(handler: any LogHandler) -> Logger {
-        var newLogger = self
-        newLogger.handler = handler
-        return newLogger
-    }
-
-    /// Create a new logger with additional metadata and a different log level.
-    ///
-    /// This method efficiently applies both modifications in a single copy-on-write operation.
-    /// The original logger is not modified.
-    ///
-    /// - Parameters:
-    ///   - additionalMetadata: The metadata dictionary to merge with existing metadata.
-    ///   - logLevel: The log level to set on the new logger.
-    /// - Returns: A new `Logger` instance with the specified modifications.
-    @usableFromInline
-    package func with(additionalMetadata: Logger.Metadata, logLevel: Logger.Level) -> Logger {
-        var newLogger = self
-        if additionalMetadata.count == 1 {
-            newLogger.handler.metadata[additionalMetadata.first!.key] = additionalMetadata.first!.value
-        } else {
-            newLogger.handler.metadata.merge(additionalMetadata) { _, new in new }
-        }
-        newLogger.logLevel = logLevel
-        return newLogger
-    }
-
-    /// Create a new logger with additional metadata and a different log handler.
-    ///
-    /// This method efficiently applies both modifications in a single copy-on-write operation.
-    /// The original logger is not modified.
-    ///
-    /// - Parameters:
-    ///   - additionalMetadata: The metadata dictionary to merge with existing metadata.
-    ///   - handler: The log handler to use for the new logger.
-    /// - Returns: A new `Logger` instance with the specified modifications.
-    @usableFromInline
-    package func with(additionalMetadata: Logger.Metadata, handler: any LogHandler) -> Logger {
-        var newLogger = self
-        var newHandler = handler
-        if additionalMetadata.count == 1 {
-            newHandler.metadata[additionalMetadata.first!.key] = additionalMetadata.first!.value
-        } else {
-            newHandler.metadata.merge(additionalMetadata) { _, new in new }
-        }
-        newLogger.handler = newHandler
-        return newLogger
-    }
-
-    /// Create a new logger with a different log level and log handler.
-    ///
-    /// This method efficiently applies both modifications in a single copy-on-write operation.
-    /// The original logger is not modified.
-    ///
-    /// - Parameters:
-    ///   - logLevel: The log level to set on the new logger.
-    ///   - handler: The log handler to use for the new logger.
-    /// - Returns: A new `Logger` instance with the specified modifications.
-    @usableFromInline
-    package func with(logLevel: Logger.Level, handler: any LogHandler) -> Logger {
-        var newLogger = self
-        var newHandler = handler
-        newHandler.logLevel = logLevel
-        newLogger.handler = newHandler
-        return newLogger
-    }
-
-    /// Create a new logger with additional metadata, a different log level, and a different log handler.
-    ///
-    /// This method efficiently applies all three modifications in a single copy-on-write operation.
-    /// The original logger is not modified.
-    ///
-    /// - Parameters:
-    ///   - additionalMetadata: The metadata dictionary to merge with existing metadata.
-    ///   - logLevel: The log level to set on the new logger.
-    ///   - handler: The log handler to use for the new logger.
-    /// - Returns: A new `Logger` instance with the specified modifications.
-    @usableFromInline
-    package func with(
-        additionalMetadata: Logger.Metadata,
-        logLevel: Logger.Level,
-        handler: any LogHandler
-    ) -> Logger {
-        var newLogger = self
-        var newHandler = handler
-        if additionalMetadata.count == 1 {
-            newHandler.metadata[additionalMetadata.first!.key] = additionalMetadata.first!.value
-        } else {
-            newHandler.metadata.merge(additionalMetadata) { _, new in new }
-        }
-        newHandler.logLevel = logLevel
-        newLogger.handler = newHandler
-        return newLogger
-    }
 }
 
-// MARK: - Static with() methods for task-local logger
+// MARK: - Static withCurrent() methods for task-local logger
 
 @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
 extension Logger {
-    /// Initialize the task-local logger with a specific label, handler, and log level, then execute a closure.
+    /// Modify or initialize the task-local logger with optional overrides.
     ///
-    /// This method is designed for initial task-local logger setup, allowing you to specify all logger
-    /// properties including the label. Use this at application entry points to set up the task-local
-    /// logger context for the duration of a request, operation, or task.
+    /// This method allows you to modify the current task-local logger or create a new one
+    /// by specifying any combination of label, handler, log level, metadata, and metadata provider.
+    /// Only the specified parameters will be modified; nil parameters leave the current values unchanged.
     ///
     /// > Important: Task-local values are **not** inherited by detached tasks created with `Task.detached`.
     /// > If you need logger context in a detached task, capture the logger explicitly or use structured
@@ -168,38 +51,88 @@ extension Logger {
     ///
     /// Example:
     /// ```swift
-    /// Logger.with(label: "request-handler", handler: myHandler, logLevel: .info) { logger in
+    /// // Initialize task-local logger at application entry point
+    /// Logger.withCurrent(
+    ///     changingLabel: "request-handler",
+    ///     changingHandler: myHandler,
+    ///     changingLogLevel: .info
+    /// ) { logger in
     ///     logger.info("Request started")
     ///     // All subsequent code has access to this logger via Logger.current
+    /// }
+    ///
+    /// // Add metadata to existing task-local logger
+    /// Logger.withCurrent(addingMetadata: ["request.id": "123"]) { logger in
+    ///     logger.info("Processing request")
+    /// }
+    ///
+    /// // Change log level temporarily
+    /// Logger.withCurrent(changingLogLevel: .debug) { logger in
+    ///     logger.debug("Detailed debugging info")
     /// }
     /// ```
     ///
     /// - Parameters:
-    ///   - label: The label for the logger.
-    ///   - handler: The log handler to use.
-    ///   - logLevel: The log level to set on the logger.
-    ///   - body: The closure to execute with the initialized task-local logger.
+    ///   - changingLabel: Optional label for the logger. If provided, `changingHandler` must also be provided.
+    ///   - changingHandler: Optional log handler. If provided, uses this handler for the logger.
+    ///   - changingLogLevel: Optional log level. If provided, sets this log level on the logger.
+    ///   - addingMetadata: Optional metadata to merge with the current logger's metadata.
+    ///   - changingMetadataProvider: Optional metadata provider to set on the logger.
+    ///   - body: The closure to execute with the modified task-local logger.
     /// - Returns: The value returned by the closure.
     @discardableResult
     @inlinable
-    public static func with<R>(
-        label: String,
-        handler: LogHandler,
-        logLevel: Logger.Level,
+    public static func withCurrent<R>(
+        changingLabel: String? = nil,
+        changingHandler: LogHandler? = nil,
+        changingLogLevel: Logger.Level? = nil,
+        addingMetadata: Metadata? = nil,
+        changingMetadataProvider: MetadataProvider? = nil,
         _ body: (Logger) throws -> R
     ) rethrows -> R {
-        var logger = Logger(label: label, handler)
-        logger.logLevel = logLevel
+        // Start with current logger or create a new one
+        var logger: Logger
+        if let label = changingLabel {
+            // If label is provided, handler must also be provided
+            // TODO: should we at this point check if there is a global handler or an existing TaskLocal handler?
+            guard let handler = changingHandler else {
+                preconditionFailure("When providing a label, you must also provide a handler")
+            }
+            logger = Logger(label: label, handler)
+        } else if let handler = changingHandler {
+            // If only handler is provided, use current label
+            logger = Logger(label: Logger.current.label, handler)
+        } else {
+            // Otherwise, start with current logger
+            logger = Logger.current
+        }
+
+        // Apply optional modifications directly
+        if let logLevel = changingLogLevel {
+            logger.logLevel = logLevel
+        }
+        if let metadata = addingMetadata {
+            // Inline metadata merging logic
+            if metadata.count == 1 {
+                logger.handler.metadata[metadata.first!.key] = metadata.first!.value
+            } else {
+                logger.handler.metadata.merge(metadata) { _, new in new }
+            }
+        }
+        if let metadataProvider = changingMetadataProvider {
+            logger.handler.metadataProvider = metadataProvider
+        }
+
         return try Logger.withTaskLocalLogger(logger) {
             try body(logger)
         }
     }
 
-    /// Initialize the task-local logger with a specific label, handler, and log level, then execute an async closure.
+    /// Modify or initialize the task-local logger with optional overrides (async version).
     ///
-    /// This method is designed for initial task-local logger setup, allowing you to specify all logger
-    /// properties including the label. Use this at application entry points to set up the task-local
-    /// logger context for the duration of a request, operation, or task.
+    /// This method allows you to modify the current task-local logger or create a new one
+    /// by specifying any combination of label, handler, log level, metadata, and metadata provider.
+    /// Only the specified parameters will be modified; nil parameters leave the current values unchanged.
     ///
     /// > Important: Task-local values are **not** inherited by detached tasks created with `Task.detached`.
     /// > If you need logger context in a detached task, capture the logger explicitly or use structured
@@ -207,332 +140,148 @@ extension Logger {
     ///
     /// Example:
     /// ```swift
-    /// await Logger.with(label: "request-handler", handler: myHandler, logLevel: .info) { logger in
+    /// // Initialize task-local logger at application entry point
+    /// await Logger.withCurrent(
+    ///     changingLabel: "request-handler",
+    ///     changingHandler: myHandler,
+    ///     changingLogLevel: .info
+    /// ) { logger in
     ///     logger.info("Request started")
     ///     await processRequest()
     /// }
     /// ```
     ///
     /// - Parameters:
-    ///   - label: The label for the logger.
-    ///   - handler: The log handler to use.
-    ///   - logLevel: The log level to set on the logger.
-    ///   - body: The async closure to execute with the initialized task-local logger.
+    ///   - changingLabel: Optional label for the logger. If provided, `changingHandler` must also be provided.
+    ///   - changingHandler: Optional log handler. If provided, uses this handler for the logger.
+    ///   - changingLogLevel: Optional log level. If provided, sets this log level on the logger.
+    ///   - addingMetadata: Optional metadata to merge with the current logger's metadata.
+    ///   - changingMetadataProvider: Optional metadata provider to set on the logger.
+    ///   - body: The async closure to execute with the modified task-local logger.
     /// - Returns: The value returned by the closure.
     @discardableResult
     @inlinable
-    public static func with<R>(
-        label: String,
-        handler: LogHandler,
-        logLevel: Logger.Level,
+    public static func withCurrent<R>(
+        changingLabel: String? = nil,
+        changingHandler: LogHandler? = nil,
+        changingLogLevel: Logger.Level? = nil,
+        addingMetadata: Metadata? = nil,
+        changingMetadataProvider: MetadataProvider? = nil,
         _ body: (Logger) async throws -> R
     ) async rethrows -> R {
-        var logger = Logger(label: label, handler)
-        logger.logLevel = logLevel
+        // Start with current logger or create a new one
+        var logger: Logger
+        if let label = changingLabel {
+            // If label is provided, handler must also be provided
+            // TODO: should we at this point check if there is a global handler or an existing TaskLocal handler?
+            guard let handler = changingHandler else {
+                preconditionFailure("When providing a label, you must also provide a handler")
+            }
+            logger = Logger(label: label, handler)
+        } else if let handler = changingHandler {
+            // If only handler is provided, use current label
+            logger = Logger(label: Logger.current.label, handler)
+        } else {
+            // Otherwise, start with current logger
+            logger = Logger.current
+        }
+
+        // Apply optional modifications directly
+        if let logLevel = changingLogLevel {
+            logger.logLevel = logLevel
+        }
+        if let metadata = addingMetadata {
+            // Inline metadata merging logic
+            if metadata.count == 1 {
+                logger.handler.metadata[metadata.first!.key] = metadata.first!.value
+            } else {
+                logger.handler.metadata.merge(metadata) { _, new in new }
+            }
+        }
+        if let metadataProvider = changingMetadataProvider {
+            logger.handler.metadataProvider = metadataProvider
+        }
+
         return try await Logger.withTaskLocalLogger(logger) {
             try await body(logger)
         }
     }
 
-    /// Modify the task-local logger with additional metadata and execute a closure that returns a value.
+    /// Override the task-local logger with a specific logger instance.
     ///
-    /// This static method modifies the current task-local logger by merging the provided metadata,
-    /// then executes the closure with the modified logger set as the task-local context.
+    /// This method is specifically for crossing boundaries from explicit logger usage to task-local usage.
+    /// It completely replaces the current task-local logger with the provided logger.
     ///
     /// > Important: Task-local values are **not** inherited by detached tasks created with `Task.detached`.
     /// > If you need logger context in a detached task, capture the logger explicitly or use structured
     /// > concurrency (`async let`, `withTaskGroup`, etc.) instead.
     ///
+    /// Example:
+    /// ```swift
+    /// // You have an explicit logger being passed around
+    /// func handleRequest(logger: Logger) {
+    ///     Logger.withCurrent(overridingLogger: logger) { _ in
+    ///         // Now all nested code can use Logger.current
+    ///         processRequest()
+    ///     }
+    /// }
+    ///
+    /// func processRequest() {
+    ///     Logger.current.info("Processing")
+    /// }
+    /// ```
+    ///
     /// - Parameters:
-    ///   - additionalMetadata: The metadata dictionary to merge with the current task-local logger's metadata.
-    ///   - body: The closure to execute with the modified task-local logger.
+    ///   - overridingLogger: The logger to set as the task-local logger.
+    ///   - body: The closure to execute with the overriding task-local logger.
     /// - Returns: The value returned by the closure.
     @discardableResult
     @inlinable
-    public static func with<R>(
-        additionalMetadata: Logger.Metadata,
+    public static func withCurrent<R>(
+        overridingLogger: Logger,
         _ body: (Logger) throws -> R
     ) rethrows -> R {
-        let modifiedLogger = Logger.current.with(additionalMetadata: additionalMetadata)
-        return try Logger.withTaskLocalLogger(modifiedLogger) {
-            try body(modifiedLogger)
+        try Logger.withTaskLocalLogger(overridingLogger) {
+            try body(overridingLogger)
         }
     }
 
-    /// Modify the task-local logger with additional metadata and execute an async closure that returns a value.
+    /// Override the task-local logger with a specific logger instance (async version).
     ///
-    /// This static method modifies the current task-local logger by merging the provided metadata,
-    /// then executes the async closure with the modified logger set as the task-local context.
+    /// This method is specifically for crossing boundaries from explicit logger usage to task-local usage.
+    /// It completely replaces the current task-local logger with the provided logger.
+    ///
+    /// > Important: Task-local values are **not** inherited by detached tasks created with `Task.detached`.
+    /// > If you need logger context in a detached task, capture the logger explicitly or use structured
+    /// > concurrency (`async let`, `withTaskGroup`, etc.) instead.
+    ///
+    /// Example:
+    /// ```swift
+    /// // You have an explicit logger being passed around
+    /// func handleRequest(logger: Logger) async {
+    ///     await Logger.withCurrent(overridingLogger: logger) { _ in
+    ///         // Now all nested code can use Logger.current
+    ///         await processRequest()
+    ///     }
+    /// }
+    ///
+    /// func processRequest() async {
+    ///     Logger.current.info("Processing")
+    /// }
+    /// ```
     ///
     /// - Parameters:
-    ///   - additionalMetadata: The metadata dictionary to merge with the current task-local logger's metadata.
-    ///   - body: The async closure to execute with the modified task-local logger.
+    ///   - overridingLogger: The logger to set as the task-local logger.
+    ///   - body: The async closure to execute with the overriding task-local logger.
     /// - Returns: The value returned by the closure.
     @discardableResult
     @inlinable
-    public static func with<R>(
-        additionalMetadata: Logger.Metadata,
+    public static func withCurrent<R>(
+        overridingLogger: Logger,
         _ body: (Logger) async throws -> R
     ) async rethrows -> R {
-        let modifiedLogger = Logger.current.with(additionalMetadata: additionalMetadata)
-        return try await Logger.withTaskLocalLogger(modifiedLogger) {
-            try await body(modifiedLogger)
-        }
-    }
-
-    /// Modify the task-local logger's log level and execute a closure that returns a value.
-    ///
-    /// This static method modifies the current task-local logger's log level, then executes the closure
-    /// with the modified logger set as the task-local context.
-    ///
-    /// - Parameters:
-    ///   - logLevel: The log level to set on the task-local logger.
-    ///   - body: The closure to execute with the modified task-local logger.
-    /// - Returns: The value returned by the closure.
-    @discardableResult
-    @inlinable
-    public static func with<R>(
-        logLevel: Logger.Level,
-        _ body: (Logger) throws -> R
-    ) rethrows -> R {
-        let modifiedLogger = Logger.current.with(logLevel: logLevel)
-        return try Logger.withTaskLocalLogger(modifiedLogger) {
-            try body(modifiedLogger)
-        }
-    }
-
-    /// Modify the task-local logger's log level and execute an async closure that returns a value.
-    ///
-    /// This static method modifies the current task-local logger's log level, then executes the async closure
-    /// with the modified logger set as the task-local context.
-    ///
-    /// - Parameters:
-    ///   - logLevel: The log level to set on the task-local logger.
-    ///   - body: The async closure to execute with the modified task-local logger.
-    /// - Returns: The value returned by the closure.
-    @discardableResult
-    @inlinable
-    public static func with<R>(
-        logLevel: Logger.Level,
-        _ body: (Logger) async throws -> R
-    ) async rethrows -> R {
-        let modifiedLogger = Logger.current.with(logLevel: logLevel)
-        return try await Logger.withTaskLocalLogger(modifiedLogger) {
-            try await body(modifiedLogger)
-        }
-    }
-
-    /// Modify the task-local logger's handler and execute a closure that returns a value.
-    ///
-    /// This static method modifies the current task-local logger's handler, then executes the closure
-    /// with the modified logger set as the task-local context.
-    ///
-    /// - Parameters:
-    ///   - handler: The log handler to use for the task-local logger.
-    ///   - body: The closure to execute with the modified task-local logger.
-    /// - Returns: The value returned by the closure.
-    @discardableResult
-    @inlinable
-    public static func with<R>(
-        handler: any LogHandler,
-        _ body: (Logger) throws -> R
-    ) rethrows -> R {
-        let modifiedLogger = Logger.current.with(handler: handler)
-        return try Logger.withTaskLocalLogger(modifiedLogger) {
-            try body(modifiedLogger)
-        }
-    }
-
-    /// Modify the task-local logger's handler and execute an async closure that returns a value.
-    ///
-    /// This static method modifies the current task-local logger's handler, then executes the async closure
-    /// with the modified logger set as the task-local context.
-    ///
-    /// - Parameters:
-    ///   - handler: The log handler to use for the task-local logger.
-    ///   - body: The async closure to execute with the modified task-local logger.
-    /// - Returns: The value returned by the closure.
-    @discardableResult
-    @inlinable
-    public static func with<R>(
-        handler: any LogHandler,
-        _ body: (Logger) async throws -> R
-    ) async rethrows -> R {
-        let modifiedLogger = Logger.current.with(handler: handler)
-        return try await Logger.withTaskLocalLogger(modifiedLogger) {
-            try await body(modifiedLogger)
-        }
-    }
-
-    /// Modify the task-local logger with additional metadata and log level, and execute a closure that returns a value.
-    ///
-    /// - Parameters:
-    ///   - additionalMetadata: The metadata dictionary to merge with the current task-local logger's metadata.
-    ///   - logLevel: The log level to set on the task-local logger.
-    ///   - body: The closure to execute with the modified task-local logger.
-    /// - Returns: The value returned by the closure.
-    @discardableResult
-    @inlinable
-    public static func with<R>(
-        additionalMetadata: Logger.Metadata,
-        logLevel: Logger.Level,
-        _ body: (Logger) throws -> R
-    ) rethrows -> R {
-        let modifiedLogger = Logger.current.with(additionalMetadata: additionalMetadata, logLevel: logLevel)
-        return try Logger.withTaskLocalLogger(modifiedLogger) {
-            try body(modifiedLogger)
-        }
-    }
-
-    /// Modify the task-local logger with additional metadata and log level, and execute an async closure that returns a value.
-    ///
-    /// - Parameters:
-    ///   - additionalMetadata: The metadata dictionary to merge with the current task-local logger's metadata.
-    ///   - logLevel: The log level to set on the task-local logger.
-    ///   - body: The async closure to execute with the modified task-local logger.
-    /// - Returns: The value returned by the closure.
-    @discardableResult
-    @inlinable
-    public static func with<R>(
-        additionalMetadata: Logger.Metadata,
-        logLevel: Logger.Level,
-        _ body: (Logger) async throws -> R
-    ) async rethrows -> R {
-        let modifiedLogger = Logger.current.with(additionalMetadata: additionalMetadata, logLevel: logLevel)
-        return try await Logger.withTaskLocalLogger(modifiedLogger) {
-            try await body(modifiedLogger)
-        }
-    }
-
-    /// Modify the task-local logger with additional metadata and handler, and execute a closure that returns a value.
-    ///
-    /// - Parameters:
-    ///   - additionalMetadata: The metadata dictionary to merge with the current task-local logger's metadata.
-    ///   - handler: The log handler to use for the task-local logger.
-    ///   - body: The closure to execute with the modified task-local logger.
-    /// - Returns: The value returned by the closure.
-    @discardableResult
-    @inlinable
-    public static func with<R>(
-        additionalMetadata: Logger.Metadata,
-        handler: any LogHandler,
-        _ body: (Logger) throws -> R
-    ) rethrows -> R {
-        let modifiedLogger = Logger.current.with(additionalMetadata: additionalMetadata, handler: handler)
-        return try Logger.withTaskLocalLogger(modifiedLogger) {
-            try body(modifiedLogger)
-        }
-    }
-
-    /// Modify the task-local logger with additional metadata and handler, and execute an async closure that returns a value.
-    ///
-    /// - Parameters:
-    ///   - additionalMetadata: The metadata dictionary to merge with the current task-local logger's metadata.
-    ///   - handler: The log handler to use for the task-local logger.
-    ///   - body: The async closure to execute with the modified task-local logger.
-    /// - Returns: The value returned by the closure.
-    @discardableResult
-    @inlinable
-    public static func with<R>(
-        additionalMetadata: Logger.Metadata,
-        handler: any LogHandler,
-        _ body: (Logger) async throws -> R
-    ) async rethrows -> R {
-        let modifiedLogger = Logger.current.with(additionalMetadata: additionalMetadata, handler: handler)
-        return try await Logger.withTaskLocalLogger(modifiedLogger) {
-            try await body(modifiedLogger)
-        }
-    }
-
-    /// Modify the task-local logger with log level and handler, and execute a closure that returns a value.
-    ///
-    /// - Parameters:
-    ///   - logLevel: The log level to set on the task-local logger.
-    ///   - handler: The log handler to use for the task-local logger.
-    ///   - body: The closure to execute with the modified task-local logger.
-    /// - Returns: The value returned by the closure.
-    @discardableResult
-    @inlinable
-    public static func with<R>(
-        logLevel: Logger.Level,
-        handler: any LogHandler,
-        _ body: (Logger) throws -> R
-    ) rethrows -> R {
-        let modifiedLogger = Logger.current.with(logLevel: logLevel, handler: handler)
-        return try Logger.withTaskLocalLogger(modifiedLogger) {
-            try body(modifiedLogger)
-        }
-    }
-
-    /// Modify the task-local logger with log level and handler, and execute an async closure that returns a value.
-    ///
-    /// - Parameters:
-    ///   - logLevel: The log level to set on the task-local logger.
-    ///   - handler: The log handler to use for the task-local logger.
-    ///   - body: The async closure to execute with the modified task-local logger.
-    /// - Returns: The value returned by the closure.
-    @discardableResult
-    @inlinable
-    public static func with<R>(
-        logLevel: Logger.Level,
-        handler: any LogHandler,
-        _ body: (Logger) async throws -> R
-    ) async rethrows -> R {
-        let modifiedLogger = Logger.current.with(logLevel: logLevel, handler: handler)
-        return try await Logger.withTaskLocalLogger(modifiedLogger) {
-            try await body(modifiedLogger)
-        }
-    }
-
-    /// Modify the task-local logger with metadata, log level, and handler, and execute a closure that returns a value.
-    ///
-    /// - Parameters:
-    ///   - additionalMetadata: The metadata dictionary to merge with the current task-local logger's metadata.
-    ///   - logLevel: The log level to set on the task-local logger.
-    ///   - handler: The log handler to use for the task-local logger.
-    ///   - body: The closure to execute with the modified task-local logger.
-    /// - Returns: The value returned by the closure.
-    @discardableResult
-    @inlinable
-    public static func with<R>(
-        additionalMetadata: Logger.Metadata,
-        logLevel: Logger.Level,
-        handler: any LogHandler,
-        _ body: (Logger) throws -> R
-    ) rethrows -> R {
-        let modifiedLogger = Logger.current.with(
-            additionalMetadata: additionalMetadata,
-            logLevel: logLevel,
-            handler: handler
-        )
-        return try Logger.withTaskLocalLogger(modifiedLogger) {
-            try body(modifiedLogger)
-        }
-    }
-
-    /// Modify the task-local logger with metadata, log level, and handler, and execute an async closure that returns a value.
-    ///
-    /// - Parameters:
-    ///   - additionalMetadata: The metadata dictionary to merge with the current task-local logger's metadata.
-    ///   - logLevel: The log level to set on the task-local logger.
-    ///   - handler: The log handler to use for the task-local logger.
-    ///   - body: The async closure to execute with the modified task-local logger.
-    /// - Returns: The value returned by the closure.
-    @discardableResult
-    @inlinable
-    public static func with<R>(
-        additionalMetadata: Logger.Metadata,
-        logLevel: Logger.Level,
-        handler: any LogHandler,
-        _ body: (Logger) async throws -> R
-    ) async rethrows -> R {
-        let modifiedLogger = Logger.current.with(
-            additionalMetadata: additionalMetadata,
-            logLevel: logLevel,
-            handler: handler
-        )
-        return try await Logger.withTaskLocalLogger(modifiedLogger) {
-            try await body(modifiedLogger)
+        try await Logger.withTaskLocalLogger(overridingLogger) {
+            try await body(overridingLogger)
         }
     }
 }

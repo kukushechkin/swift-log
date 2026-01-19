@@ -1917,6 +1917,35 @@ extension Logger {
     @TaskLocal
     static var taskLocalLogger: Logger?
 
+    /// Internal state for warning about task-local fallback usage.
+    private static let taskLocalFallbackWarningLock = Lock()
+    private nonisolated(unsafe) static var hasWarnedAboutTaskLocalFallback = false
+
+    @usableFromInline
+    static func warnOnceAboutTaskLocalFallback() {
+        taskLocalFallbackWarningLock.withLock {
+            guard !hasWarnedAboutTaskLocalFallback else { return }
+            hasWarnedAboutTaskLocalFallback = true
+            let stream = StdioOutputStream.stderr
+            stream.write(
+                """
+                warning: Logger.current accessed without task-local context. \
+                Using globally bootstrapped logger as fallback. \
+                For proper task-local logging, use Logger.withCurrent() to set up the logging context.
+
+                """
+            )
+        }
+    }
+
+    /// Creates a fallback logger using the globally bootstrapped handler.
+    /// This is not inlinable to avoid exposing the fileprivate LoggingSystem.factory.
+    @usableFromInline
+    static func makeFallbackLogger() -> Logger {
+        warnOnceAboutTaskLocalFallback()
+        return Logger(label: "task-local-fallback", LoggingSystem.factory("task-local-fallback", LoggingSystem.metadataProvider))
+    }
+
     @discardableResult
     @usableFromInline
     static func withTaskLocalLogger<R>(
@@ -1940,25 +1969,29 @@ extension Logger {
     /// This property provides direct access to the logger stored in task-local storage.
     /// Use this when you need quick access to the logger without a closure.
     ///
-    /// If no task-local logger has been set up, this returns a default no-op logger.
-    /// Use ``Logger/with(label:handler:logLevel:_:)`` to initialize the task-local logger.
+    /// If no task-local logger has been set up, this returns the globally bootstrapped logger
+    /// with the label "task-local-fallback" and emits a warning (once per process) to help with adoption.
+    /// Use ``Logger/withCurrent(changingHandler:addingMetadata:_:)`` to properly initialize the task-local logger.
     ///
     /// > Important: Task-local values are **not** inherited by detached tasks created with `Task.detached`.
     /// > If you need logger context in a detached task, capture the logger explicitly.
     ///
     /// Example:
     /// ```swift
+    /// // Without task-local context - uses global bootstrap (warns once)
     /// Logger.current.info("Quick logging")
+    ///
+    /// // With proper task-local context - no warning
+    /// Logger.withCurrent(changingHandler: myHandler) { logger in
+    ///     Logger.current.info("Properly configured")
+    /// }
     /// ```
     ///
     /// For working with the logger in a closure that returns a value, use ``withCurrent(_:)`` instead.
     @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
     @inlinable
     public static var current: Logger {
-        // TODO: non-empty label
-        // TODO: to make adoption of .current easier, get the global bootstrapped logger, print that a global logger was used; this should be spelled out in the proposal
-        // TODO: NoOp should never be constructed explicitly, let global bootstrap to handle it, give it a "misconfigured" label
-        Self.taskLocalLogger ?? Logger(label: "") // { _ in SwiftLogNoOpLogHandler() }
+        Self.taskLocalLogger ?? Self.makeFallbackLogger()
     }
 
     /// Execute a closure with access to the current task-local logger.
@@ -1966,8 +1999,9 @@ extension Logger {
     /// This method provides access to the logger stored in task-local storage, allowing you to extract it
     /// and return a value from the closure.
     ///
-    /// If no task-local logger has been set up, this provides a default no-op logger.
-    /// Use ``Logger/with(label:handler:logLevel:_:)`` to initialize the task-local logger.
+    /// If no task-local logger has been set up, this provides the globally bootstrapped logger
+    /// with the label "task-local-fallback" and emits a warning (once per process).
+    /// Use ``Logger/withCurrent(changingHandler:addingMetadata:_:)`` to initialize the task-local logger.
     ///
     /// > Important: Task-local values are **not** inherited by detached tasks created with `Task.detached`.
     /// > If you need logger context in a detached task, capture the logger explicitly:
@@ -1985,7 +2019,7 @@ extension Logger {
     @discardableResult
     @inlinable
     public static func withCurrent<R>(_ body: (Logger) -> R) -> R {
-        body(Self.taskLocalLogger ?? Logger(label: "") { _ in SwiftLogNoOpLogHandler() })
+        body(Self.taskLocalLogger ?? Self.makeFallbackLogger())
     }
 
     /// Execute an async closure with access to the current task-local logger.
@@ -1993,8 +2027,9 @@ extension Logger {
     /// This method provides access to the logger stored in task-local storage for async operations
     /// that return a value.
     ///
-    /// If no task-local logger has been set up, this provides a default no-op logger.
-    /// Use ``Logger/with(label:handler:logLevel:_:)`` to initialize the task-local logger.
+    /// If no task-local logger has been set up, this provides the globally bootstrapped logger
+    /// with the label "task-local-fallback" and emits a warning (once per process).
+    /// Use ``Logger/withCurrent(changingHandler:addingMetadata:_:)`` to initialize the task-local logger.
     ///
     /// > Important: Task-local values are **not** inherited by detached tasks created with `Task.detached`.
     /// > If you need logger context in a detached task, capture the logger explicitly:
@@ -2012,7 +2047,7 @@ extension Logger {
     @discardableResult
     @inlinable
     public static func withCurrent<R>(_ body: (Logger) async -> R) async -> R {
-        await body(Self.taskLocalLogger ?? Logger(label: "") { _ in SwiftLogNoOpLogHandler() })
+        await body(Self.taskLocalLogger ?? Self.makeFallbackLogger())
     }
 }
 

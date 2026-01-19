@@ -102,7 +102,7 @@ Use Swift's `@TaskLocal` storage to automatically propagate logger with accumula
 ```swift
 // Application code - no logger parameters needed
 func handleRequest(_ request: HTTPRequest) async throws -> HTTPResponse {
-    try await Logger.with(additionalMetadata: ["request.id": "\(request.id)"]) { logger in
+    try await Logger.withCurrent(addingMetadata: ["request.id": "\(request.id)"]) { logger in
         logger.info("Handling request")
         let user = try await authenticate(request)  // No logger parameter
         return try await processRequest(request, user: user)
@@ -136,13 +136,13 @@ public struct DatabaseClient {
 **Progressive metadata accumulation:**
 
 ```swift
-Logger.with(additionalMetadata: ["request.id": "\(request.id)"]) { _ in
+Logger.withCurrent(addingMetadata: ["request.id": "\(request.id)"]) { _ in
     // All code here has request.id
 
-    Logger.with(additionalMetadata: ["user.id": "\(user.id)"]) { _ in
+    Logger.withCurrent(addingMetadata: ["user.id": "\(user.id)"]) { _ in
         // All code here has BOTH request.id AND user.id
 
-        Logger.with(additionalMetadata: ["operation": "payment"]) { _ in
+        Logger.withCurrent(addingMetadata: ["operation": "payment"]) { _ in
             // All code here has request.id, user.id, AND operation
             Logger.current.info("Processing")  // All metadata automatically included
         }
@@ -157,72 +157,249 @@ Child tasks inherit parent context automatically through Swift's structured conc
 **Public APIs:**
 
 ```swift
-// Static methods - modify task-local context
+// MARK: - Static methods for task-local logger access and modification
+
+@available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
 extension Logger {
-    // Access current task-local logger
-    // let logger = Logger.current
-    // ... multiple log instructions
+    /// The current task-local logger.
+    ///
+    /// This property provides direct access to the logger stored in task-local storage.
+    /// Use this when you need quick access to the logger.
+    ///
+    /// If no task-local logger has been set up, this returns the globally bootstrapped logger
+    /// with the label "task-local-fallback" and emits a warning (once per process) to help with adoption.
+    /// Use ``Logger/withCurrent(changingHandler:addingMetadata:_:)`` to properly initialize the task-local logger.
+    ///
+    /// > Important: Task-local values are **not** inherited by detached tasks created with `Task.detached`.
+    /// > If you need logger context in a detached task, capture the logger explicitly.
+    ///
+    /// Example:
+    /// ```swift
+    /// // Without task-local context - uses global bootstrap (warns once)
+    /// Logger.current.info("Quick logging")
+    ///
+    /// // With proper task-local context - no warning
+    /// Logger.withCurrent(changingHandler: myHandler) { logger in
+    ///     Logger.current.info("Properly configured")
+    /// }
+    /// ```
     public static var current: Logger { get }
 
-    // Initial task-local logger setup
-    public static func withCurrent<R: ~Copyable>(
-        label: String,
-        handler: LogHandler,
-        logLevel: Logger.Level,
-        metadata: Metadata?, // TODO: split into 2 methods
-        metadataProvider: MetadataProvider?,
-
-        overridingLabel: String,
-        // ... overriding everything else
-
-        newLabel: String,
-        anotherHandler: LogHandler,
-        changingLogLevel: Logger.Level,
-        mergingMetadata: Metadata?,
-        anotherMetadataProvider: MetadataProvider?,
+    /// Modify or initialize the task-local logger with optional overrides.
+    ///
+    /// This method allows you to modify the current task-local logger or create a new one
+    /// by specifying any combination of label, handler, log level, metadata, and metadata provider.
+    /// Only the specified parameters will be modified; nil parameters leave the current values unchanged.
+    ///
+    /// > Important: Task-local values are **not** inherited by detached tasks created with `Task.detached`.
+    /// > If you need logger context in a detached task, capture the logger explicitly or use structured
+    /// > concurrency (`async let`, `withTaskGroup`, etc.) instead.
+    ///
+    /// Example:
+    /// ```swift
+    /// // Initialize task-local logger at application entry point
+    /// Logger.withCurrent(
+    ///     changingLabel: "request-handler",
+    ///     changingHandler: myHandler,
+    ///     changingLogLevel: .info
+    /// ) { logger in
+    ///     logger.info("Request started")
+    ///     // All subsequent code has access to this logger via Logger.current
+    /// }
+    ///
+    /// // Add metadata to existing task-local logger
+    /// Logger.withCurrent(addingMetadata: ["request.id": "123"]) { logger in
+    ///     logger.info("Processing request")
+    /// }
+    ///
+    /// // Change log level in a scope
+    /// Logger.withCurrent(changingLogLevel: .debug) { logger in
+    ///     logger.debug("Detailed debugging info")
+    /// }
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - changingLabel: Optional label for the logger. If provided, `changingHandler` must also be provided.
+    ///   - changingHandler: Optional log handler. If provided, uses this handler for the logger.
+    ///   - changingLogLevel: Optional log level. If provided, sets this log level on the logger.
+    ///   - addingMetadata: Optional metadata to merge with the current logger's metadata.
+    ///   - changingMetadataProvider: Optional metadata provider to set on the logger.
+    ///   - body: The closure to execute with the modified task-local logger.
+    /// - Returns: The value returned by the closure.
+    @discardableResult
+    public static func withCurrent<R>(
+        changingLabel: String? = nil,
+        changingHandler: LogHandler? = nil,
+        changingLogLevel: Logger.Level? = nil,
+        addingMetadata: Metadata? = nil,
+        changingMetadataProvider: MetadataProvider? = nil,
         _ body: (Logger) throws -> R
     ) rethrows -> R
 
-    public static func withCurrent<R: ~Copyable>(
-        label: String,
-        handler: LogHandler,
-        logLevel: Logger.Level,
-        overwritingMetadata: Metadata?,
-        addingMetadata: Metadata?,
-        metadataProvider: MetadataProvider?,
+    /// Modify or initialize the task-local logger with optional overrides (async version).
+    ///
+    /// This method allows you to modify the current task-local logger or create a new one
+    /// by specifying any combination of label, handler, log level, metadata, and metadata provider.
+    /// Only the specified parameters will be modified; nil parameters leave the current values unchanged.
+    ///
+    /// > Important: Task-local values are **not** inherited by detached tasks created with `Task.detached`.
+    /// > If you need logger context in a detached task, capture the logger explicitly or use structured
+    /// > concurrency (`async let`, `withTaskGroup`, etc.) instead.
+    ///
+    /// Example:
+    /// ```swift
+    /// // Initialize task-local logger at application entry point
+    /// await Logger.withCurrent(
+    ///     changingLabel: "request-handler",
+    ///     changingHandler: myHandler,
+    ///     changingLogLevel: .info
+    /// ) { logger in
+    ///     logger.info("Request started")
+    ///     await processRequest()
+    /// }
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - changingLabel: Optional label for the logger. If provided, `changingHandler` must also be provided.
+    ///   - changingHandler: Optional log handler. If provided, uses this handler for the logger.
+    ///   - changingLogLevel: Optional log level. If provided, sets this log level on the logger.
+    ///   - addingMetadata: Optional metadata to merge with the current logger's metadata.
+    ///   - changingMetadataProvider: Optional metadata provider to set on the logger.
+    ///   - body: The async closure to execute with the modified task-local logger.
+    /// - Returns: The value returned by the closure.
+    @discardableResult
+    public static func withCurrent<R>(
+        changingLabel: String? = nil,
+        changingHandler: LogHandler? = nil,
+        changingLogLevel: Logger.Level? = nil,
+        addingMetadata: Metadata? = nil,
+        changingMetadataProvider: MetadataProvider? = nil,
         _ body: (Logger) async throws -> R
     ) async rethrows -> R
 
-    // Logger modification
-    //
-    // TODO: sync
-    //
-    // TODO: this is specifically for crossing boundries from explicit logger usage to TaskLocal usage
+    /// Override the task-local logger with a specific logger instance.
+    ///
+    /// This method is specifically for crossing boundaries from explicit logger usage to task-local usage.
+    /// It completely replaces the current task-local logger with the provided logger.
+    ///
+    /// > Important: Task-local values are **not** inherited by detached tasks created with `Task.detached`.
+    /// > If you need logger context in a detached task, capture the logger explicitly or use structured
+    /// > concurrency (`async let`, `withTaskGroup`, etc.) instead.
+    ///
+    /// Example:
+    /// ```swift
+    /// // You have an explicit logger being passed around
+    /// func handleRequest(logger: Logger) {
+    ///     Logger.withCurrent(overridingLogger: logger) { _ in
+    ///         // Now all nested code can use Logger.current
+    ///         processRequest()
+    ///     }
+    /// }
+    ///
+    /// func processRequest() {
+    ///     Logger.current.info("Processing")
+    /// }
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - overridingLogger: The logger to set as the task-local logger.
+    ///   - body: The closure to execute with the overriding task-local logger.
+    /// - Returns: The value returned by the closure.
+    @discardableResult
+    public static func withCurrent<R>(
+        overridingLogger: Logger,
+        _ body: (Logger) throws -> R
+    ) rethrows -> R
+
+    /// Override the task-local logger with a specific logger instance (async version).
+    ///
+    /// This method is specifically for crossing boundaries from explicit logger usage to task-local usage.
+    /// It completely replaces the current task-local logger with the provided logger.
+    ///
+    /// > Important: Task-local values are **not** inherited by detached tasks created with `Task.detached`.
+    /// > If you need logger context in a detached task, capture the logger explicitly or use structured
+    /// > concurrency (`async let`, `withTaskGroup`, etc.) instead.
+    ///
+    /// Example:
+    /// ```swift
+    /// // You have an explicit logger being passed around
+    /// func handleRequest(logger: Logger) async {
+    ///     await Logger.withCurrent(overridingLogger: logger) { _ in
+    ///         // Now all nested code can use Logger.current
+    ///         await processRequest()
+    ///     }
+    /// }
+    ///
+    /// func processRequest() async {
+    ///     Logger.current.info("Processing")
+    /// }
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - overridingLogger: The logger to set as the task-local logger.
+    ///   - body: The async closure to execute with the overriding task-local logger.
+    /// - Returns: The value returned by the closure.
+    @discardableResult
     public static func withCurrent<R>(
         overridingLogger: Logger,
         _ body: (Logger) async throws -> R
     ) async rethrows -> R
-
 }
 
+// MARK: - Instance method for creating modified loggers
 
-Logger.withCurrent(mergingMetadata: [....]) { logger in
-    var newLogger = logger
-    newLogger.logLevel = .wahtever
-    Logger.withCurrent(overridingLogger: newLogger) { logger in
-        ....???
-    }
-
-    Logger.withCurrent(overridingLogLevel: .wahtever) { logger in
-        ....!!!
-    }
-}
-
-// Instance methods - create modified loggers
 extension Logger {
+    /// Create a new logger with additional metadata merged into the existing metadata.
+    ///
+    /// This method merges the provided metadata with the logger's current metadata,
+    /// returning a new logger instance. The original logger is not modified.
+    /// This method is more efficient than setting metadata items individually in a loop,
+    /// as it triggers copy-on-write only once.
+    ///
+    /// - Parameter additionalMetadata: The metadata dictionary to merge. Values in `additionalMetadata`
+    ///   will override existing values for the same keys.
+    /// - Returns: A new `Logger` instance with the merged metadata.
     public func with(additionalMetadata: Logger.Metadata) -> Logger
 }
 ```
+
+### Fallback behavior when task-local logger is not configured
+
+When `Logger.current` or `Logger.withCurrent()` is accessed without prior task-local logger setup, the system provides a helpful fallback to ease adoption:
+
+1. **Fallback to global bootstrap**: Returns a logger created using the globally bootstrapped handler (via `LoggingSystem.bootstrap()`) with the label `"task-local-fallback"`.
+
+2. **One-time warning**: Emits a warning to stderr on first access (once per process):
+   ```
+   warning: Logger.current accessed without task-local context.
+   Using globally bootstrapped logger as fallback.
+   For proper task-local logging, use Logger.withCurrent() to set up the logging context.
+   ```
+
+3. **Graceful degradation**: Applications continue to work even without explicit task-local setup, making incremental adoption easier.
+
+**Example migration path:**
+
+```swift
+// Phase 1: Existing code with global bootstrap continues working
+LoggingSystem.bootstrap(StreamLogHandler.standardError)
+
+// Library code immediately works (with warning)
+func libraryFunction() {
+    Logger.current.info("Works immediately")  // Uses fallback, warns once
+}
+
+// Phase 2: Gradually add task-local context at entry points
+func main() {
+    Logger.withCurrent(
+        changingHandler: StreamLogHandler.standardError(label: "app")
+    ) { logger in
+        libraryFunction()  // Now uses proper task-local context, no warning
+    }
+}
+```
+
+This design allows library authors to adopt `Logger.current` immediately while application developers can add proper task-local context incrementally at their convenience.
 
 ### Performance considerations
 
@@ -245,7 +422,7 @@ Purely additive. No changes to existing `Logger` users or `LogHandler` implement
 
 ### Future directions
 
-- Add `.with(handler:)`, `.with(logLevel:)` and their combinations to allow full control over the TaskLocal logger instance.
+None currently planned. The API provides complete control over the task-local logger through the flexible `withCurrent` method.
 
 ### Alternatives considered
 
