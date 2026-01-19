@@ -160,7 +160,7 @@ Child tasks inherit parent context automatically through Swift's structured conc
 // Static methods - modify task-local context
 extension Logger {
     // Access current task-local logger
-    public static var current: Logger
+    public static var current: Logger { get }
 
     public static func withCurrent<R>(_ body: (Logger) -> R) -> R
 
