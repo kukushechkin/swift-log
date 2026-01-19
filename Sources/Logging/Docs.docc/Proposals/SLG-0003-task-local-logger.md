@@ -160,37 +160,62 @@ Child tasks inherit parent context automatically through Swift's structured conc
 // Static methods - modify task-local context
 extension Logger {
     // Access current task-local logger
+    // let logger = Logger.current
+    // ... multiple log instructions
     public static var current: Logger { get }
 
-    public static func withCurrent<R>(_ body: (Logger) -> R) -> R
-
-    public static func withCurrent<R>(_ body: (Logger) async -> R) async -> R
-
     // Initial task-local logger setup
-    public static func with<R>(
+    public static func withCurrent<R: ~Copyable>(
         label: String,
         handler: LogHandler,
         logLevel: Logger.Level,
+        metadata: Metadata?, // TODO: split into 2 methods
+        metadataProvider: MetadataProvider?,
+
+        overridingLabel: String,
+        // ... overriding everything else
+
+        newLabel: String,
+        anotherHandler: LogHandler,
+        changingLogLevel: Logger.Level,
+        mergingMetadata: Metadata?,
+        anotherMetadataProvider: MetadataProvider?,
         _ body: (Logger) throws -> R
     ) rethrows -> R
 
-    public static func with<R>(
+    public static func withCurrent<R: ~Copyable>(
         label: String,
         handler: LogHandler,
         logLevel: Logger.Level,
+        overwritingMetadata: Metadata?,
+        addingMetadata: Metadata?,
+        metadataProvider: MetadataProvider?,
         _ body: (Logger) async throws -> R
     ) async rethrows -> R
 
-    // Metadata modification
-    public static func with<R>(
-        additionalMetadata: Logger.Metadata,
-        _ body: (Logger) throws -> R
-    ) rethrows -> R
-
-    public static func with<R>(
-        additionalMetadata: Logger.Metadata,
+    // Logger modification
+    //
+    // TODO: sync
+    //
+    // TODO: this is specifically for crossing boundries from explicit logger usage to TaskLocal usage
+    public static func withCurrent<R>(
+        overridingLogger: Logger,
         _ body: (Logger) async throws -> R
     ) async rethrows -> R
+
+}
+
+
+Logger.withCurrent(mergingMetadata: [....]) { logger in
+    var newLogger = logger
+    newLogger.logLevel = .wahtever
+    Logger.withCurrent(overridingLogger: newLogger) { logger in
+        ....???
+    }
+
+    Logger.withCurrent(overridingLogLevel: .wahtever) { logger in
+        ....!!!
+    }
 }
 
 // Instance methods - create modified loggers
