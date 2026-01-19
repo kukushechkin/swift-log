@@ -102,7 +102,7 @@ Use Swift's `@TaskLocal` storage to automatically propagate logger with accumula
 ```swift
 // Application code - no logger parameters needed
 func handleRequest(_ request: HTTPRequest) async throws -> HTTPResponse {
-    try await Logger.with(additionalMetadata: ["request.id": "\(request.id)"]) { logger in
+    try await Logger.withCurrent(addingMetadata: ["request.id": "\(request.id)"]) { logger in
         logger.info("Handling request")
         let user = try await authenticate(request)  // No logger parameter
         return try await processRequest(request, user: user)
@@ -136,13 +136,13 @@ public struct DatabaseClient {
 **Progressive metadata accumulation:**
 
 ```swift
-Logger.with(additionalMetadata: ["request.id": "\(request.id)"]) { _ in
+Logger.withCurrent(addingMetadata: ["request.id": "\(request.id)"]) { _ in
     // All code here has request.id
 
-    Logger.with(additionalMetadata: ["user.id": "\(user.id)"]) { _ in
+    Logger.withCurrent(addingMetadata: ["user.id": "\(user.id)"]) { _ in
         // All code here has BOTH request.id AND user.id
 
-        Logger.with(additionalMetadata: ["operation": "payment"]) { _ in
+        Logger.withCurrent(addingMetadata: ["operation": "payment"]) { _ in
             // All code here has request.id, user.id, AND operation
             Logger.current.info("Processing")  // All metadata automatically included
         }
@@ -160,62 +160,37 @@ Child tasks inherit parent context automatically through Swift's structured conc
 // Static methods - modify task-local context
 extension Logger {
     // Access current task-local logger
-    // let logger = Logger.current
-    // ... multiple log instructions
     public static var current: Logger { get }
 
-    // Initial task-local logger setup
-    public static func withCurrent<R: ~Copyable>(
-        label: String,
-        handler: LogHandler,
-        logLevel: Logger.Level,
-        metadata: Metadata?, // TODO: split into 2 methods
-        metadataProvider: MetadataProvider?,
-
-        overridingLabel: String,
-        // ... overriding everything else
-
-        newLabel: String,
-        anotherHandler: LogHandler,
-        changingLogLevel: Logger.Level,
-        mergingMetadata: Metadata?,
-        anotherMetadataProvider: MetadataProvider?,
+    // Modify or initialize task-local logger
+    public static func withCurrent<R>(
+        changingLabel: String?,
+        changingHandler: LogHandler?,
+        changingLogLevel: Logger.Level?,
+        addingMetadata: Metadata?,
+        changingMetadataProvider: MetadataProvider?,
         _ body: (Logger) throws -> R
     ) rethrows -> R
 
-    public static func withCurrent<R: ~Copyable>(
-        label: String,
-        handler: LogHandler,
-        logLevel: Logger.Level,
-        overwritingMetadata: Metadata?,
+    public static func withCurrent<R>(
+        changingLabel: String?,
+        changingHandler: LogHandler?,
+        changingLogLevel: Logger.Level?,
         addingMetadata: Metadata?,
-        metadataProvider: MetadataProvider?,
+        changingMetadataProvider: MetadataProvider?,
         _ body: (Logger) async throws -> R
     ) async rethrows -> R
 
-    // Logger modification
-    //
-    // TODO: sync
-    //
-    // TODO: this is specifically for crossing boundries from explicit logger usage to TaskLocal usage
+    // Override task-local logger with a specific instance
+    public static func withCurrent<R>(
+        overridingLogger: Logger,
+        _ body: (Logger) throws -> R
+    ) rethrows -> R
+
     public static func withCurrent<R>(
         overridingLogger: Logger,
         _ body: (Logger) async throws -> R
     ) async rethrows -> R
-
-}
-
-
-Logger.withCurrent(mergingMetadata: [....]) { logger in
-    var newLogger = logger
-    newLogger.logLevel = .wahtever
-    Logger.withCurrent(overridingLogger: newLogger) { logger in
-        ....???
-    }
-
-    Logger.withCurrent(overridingLogLevel: .wahtever) { logger in
-        ....!!!
-    }
 }
 
 // Instance methods - create modified loggers
@@ -223,6 +198,44 @@ extension Logger {
     public func with(additionalMetadata: Logger.Metadata) -> Logger
 }
 ```
+
+### Fallback behavior when task-local logger is not configured
+
+When `Logger.current` or `Logger.withCurrent()` is accessed without prior task-local logger setup, the system provides a helpful fallback to ease adoption:
+
+1. **Fallback to global bootstrap**: Returns a logger created using the globally bootstrapped handler (via `LoggingSystem.bootstrap()`) with the label `"task-local-fallback"`.
+
+2. **One-time warning**: Emits a warning to stderr on first access (once per process):
+   ```
+   warning: Logger.current accessed without task-local context.
+   Using globally bootstrapped logger as fallback.
+   For proper task-local logging, use Logger.withCurrent() to set up the logging context.
+   ```
+
+3. **Graceful degradation**: Applications continue to work even without explicit task-local setup, making incremental adoption easier.
+
+**Example migration path:**
+
+```swift
+// Phase 1: Existing code with global bootstrap continues working
+LoggingSystem.bootstrap(StreamLogHandler.standardError)
+
+// Library code immediately works (with warning)
+func libraryFunction() {
+    Logger.current.info("Works immediately")  // Uses fallback, warns once
+}
+
+// Phase 2: Gradually add task-local context at entry points
+func main() {
+    Logger.withCurrent(
+        changingHandler: StreamLogHandler.standardError(label: "app")
+    ) { logger in
+        libraryFunction()  // Now uses proper task-local context, no warning
+    }
+}
+```
+
+This design allows library authors to adopt `Logger.current` immediately while application developers can add proper task-local context incrementally at their convenience.
 
 ### Performance considerations
 
@@ -245,7 +258,7 @@ Purely additive. No changes to existing `Logger` users or `LogHandler` implement
 
 ### Future directions
 
-- Add `.with(handler:)`, `.with(logLevel:)` and their combinations to allow full control over the TaskLocal logger instance.
+None currently planned. The API provides complete control over the task-local logger through the flexible `withCurrent` method.
 
 ### Alternatives considered
 

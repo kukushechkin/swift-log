@@ -26,9 +26,9 @@ struct TaskLocalLoggerTest {
     // MARK: - Basic task-local access
 
     @Test func withCurrentProvidesDefaultLogger() {
-        // Test that withCurrent provides a logger even when no context is set
+        // Test that withCurrent provides a fallback logger when no context is set
         Logger.withCurrent { logger in
-            #expect(logger.label == "")
+            #expect(logger.label == "task-local-fallback")
         }
     }
 
@@ -36,9 +36,9 @@ struct TaskLocalLoggerTest {
         let logging = TestLogging()
         let logger = Logger(label: "test", factory: { logging.make(label: $0) })
 
-        Logger.with(
-            additionalMetadata: ["test": "value"],
-            handler: logger.handler
+        Logger.withCurrent(
+            changingHandler: logger.handler,
+            addingMetadata: ["test": "value"]
         ) { logger in
             logger.info("test message")
         }
@@ -54,9 +54,9 @@ struct TaskLocalLoggerTest {
         let logging = TestLogging()
         let logger = Logger(label: "test", factory: { logging.make(label: $0) })
 
-        let result = Logger.with(
-            additionalMetadata: ["test": "value"],
-            handler: logger.handler
+        let result = Logger.withCurrent(
+            changingHandler: logger.handler,
+            addingMetadata: ["test": "value"]
         ) { _ in
             logger.info("computing")
             return 42
@@ -70,9 +70,9 @@ struct TaskLocalLoggerTest {
         let logging = TestLogging()
         let logger = Logger(label: "test", factory: { logging.make(label: $0) })
 
-        Logger.with(
-            additionalMetadata: ["test": "async"],
-            handler: logger.handler
+        Logger.withCurrent(
+            changingHandler: logger.handler,
+            addingMetadata: ["test": "async"]
         ) { logger in
             logger.info("async message")
         }
@@ -88,9 +88,9 @@ struct TaskLocalLoggerTest {
         let logging = TestLogging()
         let logger = Logger(label: "test", factory: { logging.make(label: $0) })
 
-        let result = Logger.with(
-            additionalMetadata: ["test": "async"],
-            handler: logger.handler
+        let result = Logger.withCurrent(
+            changingHandler: logger.handler,
+            addingMetadata: ["test": "async"]
         ) { logger in
             logger.info("computing async")
             return "result"
@@ -100,15 +100,15 @@ struct TaskLocalLoggerTest {
         logging.history.assertExist(level: .info, message: "computing async")
     }
 
-    // MARK: - Static Logger.with() methods
+    // MARK: - Static Logger.withCurrent() methods
 
     @Test func staticWithMetadataSyncVoid() {
         let logging = TestLogging()
         let logger = Logger(label: "test", factory: { logging.make(label: $0) })
 
-        Logger.with(
-            additionalMetadata: ["key": "value"],
-            handler: logger.handler
+        Logger.withCurrent(
+            changingHandler: logger.handler,
+            addingMetadata: ["key": "value"]
         ) { logger in
             logger.info("test")
         }
@@ -124,9 +124,9 @@ struct TaskLocalLoggerTest {
         let logging = TestLogging()
         let logger = Logger(label: "test", factory: { logging.make(label: $0) })
 
-        let result = Logger.with(
-            additionalMetadata: ["key": "value"],
-            handler: logger.handler
+        let result = Logger.withCurrent(
+            changingHandler: logger.handler,
+            addingMetadata: ["key": "value"]
         ) { _ in
             logger.info("computing")
             return 100
@@ -140,9 +140,9 @@ struct TaskLocalLoggerTest {
         let logging = TestLogging()
         let logger = Logger(label: "test", factory: { logging.make(label: $0) })
 
-        Logger.with(
-            additionalMetadata: ["async": "true"],
-            handler: logger.handler
+        Logger.withCurrent(
+            changingHandler: logger.handler,
+            addingMetadata: ["async": "true"]
         ) { logger in
             logger.info("async test")
         }
@@ -158,9 +158,9 @@ struct TaskLocalLoggerTest {
         let logging = TestLogging()
         let logger = Logger(label: "test", factory: { logging.make(label: $0) })
 
-        let result = Logger.with(
-            additionalMetadata: ["async": "true"],
-            handler: logger.handler
+        let result = Logger.withCurrent(
+            changingHandler: logger.handler,
+            addingMetadata: ["async": "true"]
         ) { logger in
             logger.info("async computing")
             return "async result"
@@ -174,9 +174,9 @@ struct TaskLocalLoggerTest {
         let logging = TestLogging()
         let logger = Logger(label: "test", factory: { logging.make(label: $0) })
 
-        Logger.with(
-            logLevel: .warning,
-            handler: logger.handler
+        Logger.withCurrent(
+            changingHandler: logger.handler,
+            changingLogLevel: .warning
         ) { logger in
             logger.debug("should not appear")
             logger.warning("should appear")
@@ -193,8 +193,8 @@ struct TaskLocalLoggerTest {
 
         let customHandler = logging2.make(label: "custom")
 
-        Logger.with(handler: logger.handler) { _ in
-            Logger.with(handler: customHandler) { logger in
+        Logger.withCurrent(changingHandler: logger.handler) { _ in
+            Logger.withCurrent(changingHandler: customHandler) { logger in
                 logger.info("custom handler message")
             }
         }
@@ -208,10 +208,10 @@ struct TaskLocalLoggerTest {
         let logging = TestLogging()
         let logger = Logger(label: "test", factory: { logging.make(label: $0) })
 
-        Logger.with(
-            additionalMetadata: ["combined": "test"],
-            logLevel: .error,
-            handler: logger.handler
+        Logger.withCurrent(
+            changingHandler: logger.handler,
+            changingLogLevel: .error,
+            addingMetadata: ["combined": "test"]
         ) { logger in
             logger.info("should not appear")
             logger.error("should appear")
@@ -231,11 +231,11 @@ struct TaskLocalLoggerTest {
         let logging = TestLogging()
         let logger = Logger(label: "test", factory: { logging.make(label: $0) })
 
-        Logger.with(handler: logger.handler) { _ in
-            Logger.with(additionalMetadata: ["level1": "first"]) { logger in
+        Logger.withCurrent(changingHandler: logger.handler) { _ in
+            Logger.withCurrent(addingMetadata: ["level1": "first"]) { logger in
                 logger.info("level 1")
 
-                Logger.with(additionalMetadata: ["level2": "second"]) { logger in
+                Logger.withCurrent(addingMetadata: ["level2": "second"]) { logger in
                     logger.info("level 2")
                 }
             }
@@ -257,9 +257,9 @@ struct TaskLocalLoggerTest {
         let logging = TestLogging()
         let logger = Logger(label: "test", factory: { logging.make(label: $0) })
 
-        Logger.with(handler: logger.handler) { _ in
-            Logger.with(additionalMetadata: ["key": "original"]) { logger in
-                Logger.with(additionalMetadata: ["key": "override"]) { logger in
+        Logger.withCurrent(changingHandler: logger.handler) { _ in
+            Logger.withCurrent(addingMetadata: ["key": "original"]) { logger in
+                Logger.withCurrent(addingMetadata: ["key": "override"]) { logger in
                     logger.info("test")
                 }
             }
@@ -278,21 +278,21 @@ struct TaskLocalLoggerTest {
         let logging = TestLogging()
         let logger = Logger(label: "test", factory: { logging.make(label: $0) })
 
-        await Logger.with(
-            additionalMetadata: ["context": "parent"],
-            handler: logger.handler
+        await Logger.withCurrent(
+            changingHandler: logger.handler,
+            addingMetadata: ["context": "parent"]
         ) { _ in
             await withTaskGroup(of: Void.self) { group in
                 // Task 1
                 group.addTask {
-                    Logger.with(additionalMetadata: ["task": "1"]) { logger in
+                    Logger.withCurrent(addingMetadata: ["task": "1"]) { logger in
                         logger.info("task 1 message")
                     }
                 }
 
                 // Task 2
                 group.addTask {
-                    Logger.with(additionalMetadata: ["task": "2"]) { logger in
+                    Logger.withCurrent(addingMetadata: ["task": "2"]) { logger in
                         logger.info("task 2 message")
                     }
                 }
@@ -329,8 +329,8 @@ struct TaskLocalLoggerTest {
         let logging = TestLogging()
         let logger = Logger(label: "test", factory: { logging.make(label: $0) })
 
-        await Logger.with(handler: logger.handler) { _ in
-            await Logger.with(additionalMetadata: ["parent": "value"]) { logger in
+        await Logger.withCurrent(changingHandler: logger.handler) { _ in
+            await Logger.withCurrent(addingMetadata: ["parent": "value"]) { logger in
                 logger.info("parent message")
 
                 // Create child task
@@ -359,13 +359,13 @@ struct TaskLocalLoggerTest {
         let logging = TestLogging()
         let logger = Logger(label: "test", factory: { logging.make(label: $0) })
 
-        await Logger.with(handler: logger.handler) { _ in
-            await Logger.with(additionalMetadata: ["parent": "original"]) { logger in
+        await Logger.withCurrent(changingHandler: logger.handler) { _ in
+            await Logger.withCurrent(addingMetadata: ["parent": "original"]) { logger in
                 logger.info("parent")
 
                 // Child overrides context
                 await Task {
-                    Logger.with(additionalMetadata: ["parent": "overridden"]) { logger in
+                    Logger.withCurrent(addingMetadata: ["parent": "overridden"]) { logger in
                         logger.info("child")
                     }
                 }.value
@@ -398,8 +398,8 @@ struct TaskLocalLoggerTest {
         let logging = TestLogging()
         let logger = Logger(label: "test", factory: { logging.make(label: $0) })
 
-        try await Logger.with(handler: logger.handler) { _ in
-            try await Logger.with(additionalMetadata: ["request": "123"]) { logger in
+        try await Logger.withCurrent(changingHandler: logger.handler) { _ in
+            try await Logger.withCurrent(addingMetadata: ["request": "123"]) { logger in
                 logger.info("before await")
 
                 // Simulate async work
@@ -444,8 +444,8 @@ struct TaskLocalLoggerTest {
             }
         }
 
-        await Logger.with(handler: logger.handler) { _ in
-            await Logger.with(additionalMetadata: ["flow": "async"]) { logger in
+        await Logger.withCurrent(changingHandler: logger.handler) { _ in
+            await Logger.withCurrent(addingMetadata: ["flow": "async"]) { logger in
                 await outerAsync()
             }
         }
@@ -474,8 +474,8 @@ struct TaskLocalLoggerTest {
         let logging = TestLogging()
         let logger = Logger(label: "test", factory: { logging.make(label: $0) })
 
-        Logger.with(handler: logger.handler) { _ in
-            Logger.with(logLevel: .warning) { logger in
+        Logger.withCurrent(changingHandler: logger.handler) { _ in
+            Logger.withCurrent(changingLogLevel: .warning) { logger in
                 logger.trace("trace - should not appear")
                 logger.debug("debug - should not appear")
                 logger.info("info - should not appear")
@@ -496,11 +496,11 @@ struct TaskLocalLoggerTest {
         let logging = TestLogging()
         let logger = Logger(label: "test", factory: { logging.make(label: $0) })
 
-        Logger.with(handler: logger.handler) { _ in
-            Logger.with(logLevel: .error) { logger in
+        Logger.withCurrent(changingHandler: logger.handler) { _ in
+            Logger.withCurrent(changingLogLevel: .error) { logger in
                 logger.info("first - should not appear")
 
-                Logger.with(logLevel: .info) { logger in
+                Logger.withCurrent(changingLogLevel: .info) { logger in
                     logger.info("second - should appear")
                 }
 
@@ -535,7 +535,9 @@ struct TaskLocalLoggerTest {
         var logger = Logger(label: "test", factory: { logging.make(label: $0) })
         logger.logLevel = .error
 
-        let copied = logger.with(logLevel: .debug)
+        // Create a copy and change its log level
+        var copied = logger
+        copied.logLevel = .debug
 
         copied.debug("should appear")
         logger.debug("should not appear")
@@ -549,7 +551,8 @@ struct TaskLocalLoggerTest {
         let logging2 = TestLogging()
         let logger = Logger(label: "test", factory: { logging1.make(label: $0) })
 
-        let copied = logger.with(handler: logging2.make(label: "copied"))
+        // Create a new logger with a different handler instead of using .with(handler:)
+        let copied = Logger(label: "copied", factory: { logging2.make(label: $0) })
 
         logger.info("original")
         copied.info("copied")
@@ -586,7 +589,7 @@ struct TaskLocalLoggerTest {
         let logger = Logger(label: "test", factory: { logging.make(label: $0) })
 
         func processRequest(id: String) async {
-            await Logger.with(additionalMetadata: ["request.id": "\(id)"]) { logger in
+            await Logger.withCurrent(addingMetadata: ["request.id": "\(id)"]) { logger in
                 logger.info("Request received")
 
                 await authenticateUser(username: "alice")
@@ -596,12 +599,12 @@ struct TaskLocalLoggerTest {
         }
 
         func authenticateUser(username: String) async {
-            Logger.with(additionalMetadata: ["user": "\(username)"]) { logger in
+            Logger.withCurrent(addingMetadata: ["user": "\(username)"]) { logger in
                 logger.debug("Authenticating user")
             }
         }
 
-        await Logger.with(handler: logger.handler) { _ in
+        await Logger.withCurrent(changingHandler: logger.handler) { _ in
             await processRequest(id: "req-123")
         }
 
@@ -636,8 +639,8 @@ struct TaskLocalLoggerTest {
         }
 
         // Application sets up context
-        Logger.with(handler: logger.handler) { _ in
-            Logger.with(additionalMetadata: ["request.id": "123"]) { logger in
+        Logger.withCurrent(changingHandler: logger.handler) { _ in
+            Logger.withCurrent(addingMetadata: ["request.id": "123"]) { logger in
                 let db = DatabaseClient()
                 db.query("SELECT * FROM users")
             }
