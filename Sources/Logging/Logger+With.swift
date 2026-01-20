@@ -94,6 +94,7 @@ extension Logger {
         var logger: Logger
         if let label = changingLabel {
             // If label is provided, handler must also be provided
+            // TODO: should we at this point check if there is a global handler or an existing TaskLocal handler?
             guard let handler = changingHandler else {
                 preconditionFailure("When providing a label, you must also provide a handler")
             }
@@ -172,6 +173,7 @@ extension Logger {
         var logger: Logger
         if let label = changingLabel {
             // If label is provided, handler must also be provided
+            // TODO: should we at this point check if there is a global handler or an existing TaskLocal handler?
             guard let handler = changingHandler else {
                 preconditionFailure("When providing a label, you must also provide a handler")
             }
