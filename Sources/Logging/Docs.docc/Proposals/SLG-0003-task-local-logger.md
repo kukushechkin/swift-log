@@ -180,9 +180,10 @@ extension Logger {
     ///
     /// // With proper task-local context - no warning
     /// Logger.withCurrent(changingHandler: myHandler) { logger in
-    ///     Logger.current.info("Properly configured")
+    ///     logger.info("Properly configured")
     /// }
     /// ```
+    // TODO: add a note that they can extract the TaskLocal logger instead of accessing the TaskLocal logger all the time
     public static var current: Logger { get }
 
     /// Modify or initialize the task-local logger with optional overrides.
@@ -226,15 +227,20 @@ extension Logger {
     ///   - changingMetadataProvider: Optional metadata provider to set on the logger.
     ///   - body: The closure to execute with the modified task-local logger.
     /// - Returns: The value returned by the closure.
-    @discardableResult
-    public static func withCurrent<R>(
-        changingLabel: String? = nil,
-        changingHandler: LogHandler? = nil,
-        changingLogLevel: Logger.Level? = nil,
-        addingMetadata: Metadata? = nil,
-        changingMetadataProvider: MetadataProvider? = nil,
-        _ body: (Logger) throws -> R
-    ) rethrows -> R
+    // TODO: add non-Copyable
+    // TODO: do not use rethrows
+    // TODO: do not use one letter generic type name
+    // TODO: check Swift API guidelines if there is something about this
+    // TODO: Logger.withCurrent() vs Logger.withCurrentLogger()
+    // TODO: merging metadata, not adding
+    public static func withCurrent<Return: ~Copyable, Failure: Error>(
+        overridingLabel: String? = nil,
+        overridingHandler: LogHandler? = nil,
+        overridingLogLevel: Logger.Level? = nil,
+        mergingMetadata: Metadata? = nil,
+        overridingMetadataProvider: MetadataProvider? = nil,
+        _ body: (Logger) throws(E) -> R
+    ) throws(E) -> R
 
     /// Modify or initialize the task-local logger with optional overrides (async version).
     ///
@@ -267,7 +273,6 @@ extension Logger {
     ///   - changingMetadataProvider: Optional metadata provider to set on the logger.
     ///   - body: The async closure to execute with the modified task-local logger.
     /// - Returns: The value returned by the closure.
-    @discardableResult
     public static func withCurrent<R>(
         changingLabel: String? = nil,
         changingHandler: LogHandler? = nil,
@@ -348,6 +353,7 @@ extension Logger {
 
 // MARK: - Instance method for creating modified loggers
 
+// TODO: split it out, does not need to be part of this proposal
 extension Logger {
     /// Create a new logger with additional metadata merged into the existing metadata.
     ///
