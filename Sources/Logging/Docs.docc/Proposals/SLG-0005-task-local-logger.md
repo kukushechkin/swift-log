@@ -1,10 +1,10 @@
-# SLG-0003: Task-local logger with automatic metadata propagation
+# SLG-0005: Task-local logger with automatic metadata propagation
 
 Accumulate structured logging metadata across async call stacks using task-local storage.
 
 ## Overview
 
-- Proposal: SLG-0003
+- Proposal: SLG-0005
 - Author(s): [Author Name](https://github.com/author)
 - Status: **Awaiting Review**
 - Issue: [apple/swift-log#XXX](https://github.com/apple/swift-log/issues/XXX)
