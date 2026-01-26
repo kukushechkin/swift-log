@@ -24,7 +24,7 @@ extension Logger {
     ///   will override existing values for the same keys.
     /// - Returns: A new `Logger` instance with the merged metadata.
     @inlinable
-    public func with(additionalMetadata: Logger.Metadata) -> Logger {
+    package func with(additionalMetadata: Logger.Metadata) -> Logger {
         var newLogger = self
         if additionalMetadata.count == 1 {
             newLogger.handler.metadata[additionalMetadata.first!.key] = additionalMetadata.first!.value
@@ -62,7 +62,7 @@ extension Logger {
     /// }
     ///
     /// // Add metadata to existing task-local logger
-    /// Logger.withCurrent(addingMetadata: ["request.id": "123"]) { logger in
+    /// Logger.withCurrent(mergingMetadata: ["request.id": "123"]) { logger in
     ///     logger.info("Processing request")
     /// }
     ///
@@ -73,31 +73,28 @@ extension Logger {
     /// ```
     ///
     /// - Parameters:
-    ///   - changingLabel: Optional label for the logger. If provided, `changingHandler` must also be provided.
+    ///   - changingLabel: Optional label for the logger. If provided without `changingHandler`, reuses the current task-local logger's handler.
     ///   - changingHandler: Optional log handler. If provided, uses this handler for the logger.
     ///   - changingLogLevel: Optional log level. If provided, sets this log level on the logger.
-    ///   - addingMetadata: Optional metadata to merge with the current logger's metadata.
+    ///   - mergingMetadata: Optional metadata to merge with the current logger's metadata.
     ///   - changingMetadataProvider: Optional metadata provider to set on the logger.
     ///   - body: The closure to execute with the modified task-local logger.
     /// - Returns: The value returned by the closure.
     @discardableResult
     @inlinable
-    public static func withCurrent<R>(
+    public static func withCurrent<Return, Failure: Error>(
         changingLabel: String? = nil,
-        changingHandler: LogHandler? = nil,
+        changingHandler: (any LogHandler)? = nil,
         changingLogLevel: Logger.Level? = nil,
-        addingMetadata: Metadata? = nil,
+        mergingMetadata: Metadata? = nil,
         changingMetadataProvider: MetadataProvider? = nil,
-        _ body: (Logger) throws -> R
-    ) rethrows -> R {
+        _ body: (Logger) throws(Failure) -> Return
+    ) rethrows -> Return {
         // Start with current logger or create a new one
         var logger: Logger
         if let label = changingLabel {
-            // If label is provided, handler must also be provided
-            // TODO: should we at this point check if there is a global handler or an existing TaskLocal handler?
-            guard let handler = changingHandler else {
-                preconditionFailure("When providing a label, you must also provide a handler")
-            }
+            // If label is provided, use provided handler or reuse current handler
+            let handler = changingHandler ?? Logger.current.handler
             logger = Logger(label: label, handler)
         } else if let handler = changingHandler {
             // If only handler is provided, use current label
@@ -111,7 +108,7 @@ extension Logger {
         if let logLevel = changingLogLevel {
             logger.logLevel = logLevel
         }
-        if let metadata = addingMetadata {
+        if let metadata = mergingMetadata {
             // Inline metadata merging logic
             if metadata.count == 1 {
                 logger.handler.metadata[metadata.first!.key] = metadata.first!.value
@@ -152,31 +149,28 @@ extension Logger {
     /// ```
     ///
     /// - Parameters:
-    ///   - changingLabel: Optional label for the logger. If provided, `changingHandler` must also be provided.
+    ///   - changingLabel: Optional label for the logger. If provided without `changingHandler`, reuses the current task-local logger's handler.
     ///   - changingHandler: Optional log handler. If provided, uses this handler for the logger.
     ///   - changingLogLevel: Optional log level. If provided, sets this log level on the logger.
-    ///   - addingMetadata: Optional metadata to merge with the current logger's metadata.
+    ///   - mergingMetadata: Optional metadata to merge with the current logger's metadata.
     ///   - changingMetadataProvider: Optional metadata provider to set on the logger.
     ///   - body: The async closure to execute with the modified task-local logger.
     /// - Returns: The value returned by the closure.
     @discardableResult
     @inlinable
-    public static func withCurrent<R>(
+    public static func withCurrent<Return, Failure: Error>(
         changingLabel: String? = nil,
-        changingHandler: LogHandler? = nil,
+        changingHandler: (any LogHandler)? = nil,
         changingLogLevel: Logger.Level? = nil,
-        addingMetadata: Metadata? = nil,
+        mergingMetadata: Metadata? = nil,
         changingMetadataProvider: MetadataProvider? = nil,
-        _ body: (Logger) async throws -> R
-    ) async rethrows -> R {
+        _ body: (Logger) async throws(Failure) -> Return
+    ) async rethrows -> Return {
         // Start with current logger or create a new one
         var logger: Logger
         if let label = changingLabel {
-            // If label is provided, handler must also be provided
-            // TODO: should we at this point check if there is a global handler or an existing TaskLocal handler?
-            guard let handler = changingHandler else {
-                preconditionFailure("When providing a label, you must also provide a handler")
-            }
+            // If label is provided, use provided handler or reuse current handler
+            let handler = changingHandler ?? Logger.current.handler
             logger = Logger(label: label, handler)
         } else if let handler = changingHandler {
             // If only handler is provided, use current label
@@ -190,7 +184,7 @@ extension Logger {
         if let logLevel = changingLogLevel {
             logger.logLevel = logLevel
         }
-        if let metadata = addingMetadata {
+        if let metadata = mergingMetadata {
             // Inline metadata merging logic
             if metadata.count == 1 {
                 logger.handler.metadata[metadata.first!.key] = metadata.first!.value
@@ -237,10 +231,10 @@ extension Logger {
     /// - Returns: The value returned by the closure.
     @discardableResult
     @inlinable
-    public static func withCurrent<R>(
+    public static func withCurrent<Return, Failure: Error>(
         overridingLogger: Logger,
-        _ body: (Logger) throws -> R
-    ) rethrows -> R {
+        _ body: (Logger) throws(Failure) -> Return
+    ) rethrows -> Return {
         try Logger.withTaskLocalLogger(overridingLogger) {
             try body(overridingLogger)
         }
@@ -276,10 +270,10 @@ extension Logger {
     /// - Returns: The value returned by the closure.
     @discardableResult
     @inlinable
-    public static func withCurrent<R>(
+    public static func withCurrent<Return, Failure: Error>(
         overridingLogger: Logger,
-        _ body: (Logger) async throws -> R
-    ) async rethrows -> R {
+        _ body: (Logger) async throws(Failure) -> Return
+    ) async rethrows -> Return {
         try await Logger.withTaskLocalLogger(overridingLogger) {
             try await body(overridingLogger)
         }

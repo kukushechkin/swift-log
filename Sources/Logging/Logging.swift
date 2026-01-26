@@ -1948,19 +1948,19 @@ extension Logger {
 
     @discardableResult
     @usableFromInline
-    static func withTaskLocalLogger<R>(
+    static func withTaskLocalLogger<Return, Failure: Error>(
         _ value: Logger,
-        operation: () async throws -> R
-    ) async rethrows -> R {
+        operation: () async throws(Failure) -> Return
+    ) async rethrows -> Return {
         try await Self.$taskLocalLogger.withValue(value, operation: operation)
     }
 
     @discardableResult
     @usableFromInline
-    static func withTaskLocalLogger<R>(
+    static func withTaskLocalLogger<Return, Failure: Error>(
         _ value: Logger,
-        operation: () throws -> R
-    ) rethrows -> R {
+        operation: () throws(Failure) -> Return
+    ) rethrows -> Return {
         try Self.$taskLocalLogger.withValue(value, operation: operation)
     }
 
@@ -1971,23 +1971,26 @@ extension Logger {
     ///
     /// If no task-local logger has been set up, this returns the globally bootstrapped logger
     /// with the label "task-local-fallback" and emits a warning (once per process) to help with adoption.
-    /// Use ``Logger/withCurrent(changingHandler:addingMetadata:_:)`` to properly initialize the task-local logger.
+    /// Use ``Logger/withCurrent(changingHandler:mergingMetadata:_:)`` to properly initialize the task-local logger.
+    ///
+    /// > Tip: For performance-critical code with many log calls, consider extracting the logger once
+    /// > using ``Logger/withCurrent(_:)`` instead of accessing ``Logger/current`` repeatedly:
+    /// > ```swift
+    /// > // Instead of this (multiple task-local lookups):
+    /// > for item in items {
+    /// >     Logger.current.debug("Processing", metadata: ["id": "\(item.id)"])
+    /// > }
+    /// >
+    /// > // Do this (single lookup, then use captured logger):
+    /// > Logger.withCurrent { logger in
+    /// >     for item in items {
+    /// >         logger.debug("Processing", metadata: ["id": "\(item.id)"])
+    /// >     }
+    /// > }
+    /// > ```
     ///
     /// > Important: Task-local values are **not** inherited by detached tasks created with `Task.detached`.
     /// > If you need logger context in a detached task, capture the logger explicitly.
-    ///
-    /// Example:
-    /// ```swift
-    /// // Without task-local context - uses global bootstrap (warns once)
-    /// Logger.current.info("Quick logging")
-    ///
-    /// // With proper task-local context - no warning
-    /// Logger.withCurrent(changingHandler: myHandler) { logger in
-    ///     Logger.current.info("Properly configured")
-    /// }
-    /// ```
-    ///
-    /// For working with the logger in a closure that returns a value, use ``withCurrent(_:)`` instead.
     @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
     @inlinable
     public static var current: Logger {
@@ -2001,7 +2004,7 @@ extension Logger {
     ///
     /// If no task-local logger has been set up, this provides the globally bootstrapped logger
     /// with the label "task-local-fallback" and emits a warning (once per process).
-    /// Use ``Logger/withCurrent(changingHandler:addingMetadata:_:)`` to initialize the task-local logger.
+    /// Use ``Logger/withCurrent(changingHandler:mergingMetadata:_:)`` to initialize the task-local logger.
     ///
     /// > Important: Task-local values are **not** inherited by detached tasks created with `Task.detached`.
     /// > If you need logger context in a detached task, capture the logger explicitly:
@@ -2029,7 +2032,7 @@ extension Logger {
     ///
     /// If no task-local logger has been set up, this provides the globally bootstrapped logger
     /// with the label "task-local-fallback" and emits a warning (once per process).
-    /// Use ``Logger/withCurrent(changingHandler:addingMetadata:_:)`` to initialize the task-local logger.
+    /// Use ``Logger/withCurrent(changingHandler:mergingMetadata:_:)`` to initialize the task-local logger.
     ///
     /// > Important: Task-local values are **not** inherited by detached tasks created with `Task.detached`.
     /// > If you need logger context in a detached task, capture the logger explicitly:

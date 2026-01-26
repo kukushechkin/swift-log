@@ -12,7 +12,7 @@ Accumulate structured logging metadata across async call stacks using task-local
 
 ### Introduction
 
-Add task-local logger storage to enable progressive metadata accumulation without explicit logger parameters. This proposal focuses on solving metadata propagation challenges in applications and libraries.
+This proposal adds task-local logger storage to enable progressive metadata accumulation without explicit logger parameters. It focuses on solving metadata propagation challenges in applications and libraries.
 
 ### Motivation
 
@@ -48,7 +48,7 @@ func accessDatabase(_ user: User, logger: Logger) async throws {
 
 Every layer must accept a logger parameter, mutate it to add metadata, and pass it to the next layer. This is verbose and error-prone.
 
-#### Problem 2: Library APIs polluted by logging and lost metadata context
+#### Problem 2: Library APIs polluted by logging or lost metadata context
 
 Libraries face a dilemma with three unsatisfying options:
 
@@ -100,9 +100,9 @@ public struct DatabaseClient {
 Use Swift's `@TaskLocal` storage to automatically propagate logger with accumulated metadata:
 
 ```swift
-// Application code - no logger parameters needed
+// Application code – no logger parameters needed
 func handleRequest(_ request: HTTPRequest) async throws -> HTTPResponse {
-    try await Logger.withCurrent(addingMetadata: ["request.id": "\(request.id)"]) { logger in
+    try await Logger.withCurrent(mergingMetadata: ["request.id": "\(request.id)"]) { logger in
         logger.info("Handling request")
         let user = try await authenticate(request)  // No logger parameter
         return try await processRequest(request, user: user)
@@ -136,14 +136,15 @@ public struct DatabaseClient {
 **Progressive metadata accumulation:**
 
 ```swift
-Logger.withCurrent(addingMetadata: ["request.id": "\(request.id)"]) { _ in
+Logger.withCurrent(mergingMetadata: ["request.id": "\(request.id)"]) { _ in
     // All code here has request.id
-
-    Logger.withCurrent(addingMetadata: ["user.id": "\(user.id)"]) { _ in
+    // ...
+    Logger.withCurrent(mergingMetadata: ["user.id": "\(user.id)"]) { _ in
         // All code here has BOTH request.id AND user.id
-
-        Logger.withCurrent(addingMetadata: ["operation": "payment"]) { _ in
+        // ...
+        Logger.withCurrent(mergingMetadata: ["operation": "payment"]) { _ in
             // All code here has request.id, user.id, AND operation
+            // ...
             Logger.current.info("Processing")  // All metadata automatically included
         }
     }
@@ -157,8 +158,6 @@ Child tasks inherit parent context automatically through Swift's structured conc
 **Public APIs:**
 
 ```swift
-// MARK: - Static methods for task-local logger access and modification
-
 @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
 extension Logger {
     /// The current task-local logger.
@@ -168,22 +167,26 @@ extension Logger {
     ///
     /// If no task-local logger has been set up, this returns the globally bootstrapped logger
     /// with the label "task-local-fallback" and emits a warning (once per process) to help with adoption.
-    /// Use ``Logger/withCurrent(changingHandler:addingMetadata:_:)`` to properly initialize the task-local logger.
+    /// Use ``Logger/withCurrent(changingHandler:mergingMetadata:_:)`` to properly initialize the task-local logger.
+    ///
+    /// > Tip: For performance-critical code with many log calls, consider extracting the logger once
+    /// > using ``Logger/withCurrent(_:)`` instead of accessing ``Logger/current`` repeatedly:
+    /// > ```swift
+    /// > // Instead of this (multiple task-local lookups):
+    /// > for item in items {
+    /// >     Logger.current.debug("Processing", metadata: ["id": "\(item.id)"])
+    /// > }
+    /// >
+    /// > // Do this (single lookup, then use captured logger):
+    /// > Logger.withCurrent { logger in
+    /// >     for item in items {
+    /// >         logger.debug("Processing", metadata: ["id": "\(item.id)"])
+    /// >     }
+    /// > }
+    /// > ```
     ///
     /// > Important: Task-local values are **not** inherited by detached tasks created with `Task.detached`.
     /// > If you need logger context in a detached task, capture the logger explicitly.
-    ///
-    /// Example:
-    /// ```swift
-    /// // Without task-local context - uses global bootstrap (warns once)
-    /// Logger.current.info("Quick logging")
-    ///
-    /// // With proper task-local context - no warning
-    /// Logger.withCurrent(changingHandler: myHandler) { logger in
-    ///     logger.info("Properly configured")
-    /// }
-    /// ```
-    // TODO: add a note that they can extract the TaskLocal logger instead of accessing the TaskLocal logger all the time
     public static var current: Logger { get }
 
     /// Modify or initialize the task-local logger with optional overrides.
@@ -209,7 +212,7 @@ extension Logger {
     /// }
     ///
     /// // Add metadata to existing task-local logger
-    /// Logger.withCurrent(addingMetadata: ["request.id": "123"]) { logger in
+    /// Logger.withCurrent(mergingMetadata: ["request.id": "123"]) { logger in
     ///     logger.info("Processing request")
     /// }
     ///
@@ -223,24 +226,18 @@ extension Logger {
     ///   - changingLabel: Optional label for the logger. If provided, `changingHandler` must also be provided.
     ///   - changingHandler: Optional log handler. If provided, uses this handler for the logger.
     ///   - changingLogLevel: Optional log level. If provided, sets this log level on the logger.
-    ///   - addingMetadata: Optional metadata to merge with the current logger's metadata.
+    ///   - mergingMetadata: Optional metadata to merge with the current logger's metadata.
     ///   - changingMetadataProvider: Optional metadata provider to set on the logger.
     ///   - body: The closure to execute with the modified task-local logger.
     /// - Returns: The value returned by the closure.
-    // TODO: add non-Copyable
-    // TODO: do not use rethrows
-    // TODO: do not use one letter generic type name
-    // TODO: check Swift API guidelines if there is something about this
-    // TODO: Logger.withCurrent() vs Logger.withCurrentLogger()
-    // TODO: merging metadata, not adding
-    public static func withCurrent<Return: ~Copyable, Failure: Error>(
-        overridingLabel: String? = nil,
-        overridingHandler: LogHandler? = nil,
-        overridingLogLevel: Logger.Level? = nil,
+    public static func withCurrent<Return, Failure: Error>(
+        changingLabel: String? = nil,
+        changingHandler: (any LogHandler)? = nil,
+        changingLogLevel: Logger.Level? = nil,
         mergingMetadata: Metadata? = nil,
-        overridingMetadataProvider: MetadataProvider? = nil,
-        _ body: (Logger) throws(E) -> R
-    ) throws(E) -> R
+        changingMetadataProvider: MetadataProvider? = nil,
+        _ body: (Logger) throws(Failure) -> Return
+    ) rethrows -> Return
 
     /// Modify or initialize the task-local logger with optional overrides (async version).
     ///
@@ -269,18 +266,18 @@ extension Logger {
     ///   - changingLabel: Optional label for the logger. If provided, `changingHandler` must also be provided.
     ///   - changingHandler: Optional log handler. If provided, uses this handler for the logger.
     ///   - changingLogLevel: Optional log level. If provided, sets this log level on the logger.
-    ///   - addingMetadata: Optional metadata to merge with the current logger's metadata.
+    ///   - mergingMetadata: Optional metadata to merge with the current logger's metadata.
     ///   - changingMetadataProvider: Optional metadata provider to set on the logger.
     ///   - body: The async closure to execute with the modified task-local logger.
     /// - Returns: The value returned by the closure.
-    public static func withCurrent<R>(
+    public static func withCurrent<Return, Failure: Error>(
         changingLabel: String? = nil,
-        changingHandler: LogHandler? = nil,
+        changingHandler: (any LogHandler)? = nil,
         changingLogLevel: Logger.Level? = nil,
-        addingMetadata: Metadata? = nil,
+        mergingMetadata: Metadata? = nil,
         changingMetadataProvider: MetadataProvider? = nil,
-        _ body: (Logger) async throws -> R
-    ) async rethrows -> R
+        _ body: (Logger) async throws(Failure) -> Return
+    ) async rethrows -> Return
 
     /// Override the task-local logger with a specific logger instance.
     ///
@@ -311,10 +308,10 @@ extension Logger {
     ///   - body: The closure to execute with the overriding task-local logger.
     /// - Returns: The value returned by the closure.
     @discardableResult
-    public static func withCurrent<R>(
+    public static func withCurrent<Return, Failure: Error>(
         overridingLogger: Logger,
-        _ body: (Logger) throws -> R
-    ) rethrows -> R
+        _ body: (Logger) throws(Failure) -> Return
+    ) rethrows -> Return
 
     /// Override the task-local logger with a specific logger instance (async version).
     ///
@@ -345,29 +342,11 @@ extension Logger {
     ///   - body: The async closure to execute with the overriding task-local logger.
     /// - Returns: The value returned by the closure.
     @discardableResult
-    public static func withCurrent<R>(
+    public static func withCurrent<Return, Failure: Error>(
         overridingLogger: Logger,
-        _ body: (Logger) async throws -> R
-    ) async rethrows -> R
+        _ body: (Logger) async throws(Failure) -> Return
+    ) async rethrows -> Return
 }
-
-// MARK: - Instance method for creating modified loggers
-
-// TODO: split it out, does not need to be part of this proposal
-extension Logger {
-    /// Create a new logger with additional metadata merged into the existing metadata.
-    ///
-    /// This method merges the provided metadata with the logger's current metadata,
-    /// returning a new logger instance. The original logger is not modified.
-    /// This method is more efficient than setting metadata items individually in a loop,
-    /// as it triggers copy-on-write only once.
-    ///
-    /// - Parameter additionalMetadata: The metadata dictionary to merge. Values in `additionalMetadata`
-    ///   will override existing values for the same keys.
-    /// - Returns: A new `Logger` instance with the merged metadata.
-    public func with(additionalMetadata: Logger.Metadata) -> Logger
-}
-```
 
 ### Fallback behavior when task-local logger is not configured
 
@@ -383,6 +362,8 @@ When `Logger.current` or `Logger.withCurrent()` is accessed without prior task-l
    ```
 
 3. **Graceful degradation**: Applications continue to work even without explicit task-local setup, making incremental adoption easier.
+
+4. **A path for global bootstrapping deprecation**: If initialized explicitly, task-local logger does not require global boostrapping.
 
 **Example migration path:**
 

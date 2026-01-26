@@ -38,7 +38,7 @@ struct TaskLocalLoggerTest {
 
         Logger.withCurrent(
             changingHandler: logger.handler,
-            addingMetadata: ["test": "value"]
+            mergingMetadata: ["test": "value"]
         ) { logger in
             logger.info("test message")
         }
@@ -56,7 +56,7 @@ struct TaskLocalLoggerTest {
 
         let result = Logger.withCurrent(
             changingHandler: logger.handler,
-            addingMetadata: ["test": "value"]
+            mergingMetadata: ["test": "value"]
         ) { _ in
             logger.info("computing")
             return 42
@@ -72,7 +72,7 @@ struct TaskLocalLoggerTest {
 
         Logger.withCurrent(
             changingHandler: logger.handler,
-            addingMetadata: ["test": "async"]
+            mergingMetadata: ["test": "async"]
         ) { logger in
             logger.info("async message")
         }
@@ -90,7 +90,7 @@ struct TaskLocalLoggerTest {
 
         let result = Logger.withCurrent(
             changingHandler: logger.handler,
-            addingMetadata: ["test": "async"]
+            mergingMetadata: ["test": "async"]
         ) { logger in
             logger.info("computing async")
             return "result"
@@ -108,7 +108,7 @@ struct TaskLocalLoggerTest {
 
         Logger.withCurrent(
             changingHandler: logger.handler,
-            addingMetadata: ["key": "value"]
+            mergingMetadata: ["key": "value"]
         ) { logger in
             logger.info("test")
         }
@@ -126,7 +126,7 @@ struct TaskLocalLoggerTest {
 
         let result = Logger.withCurrent(
             changingHandler: logger.handler,
-            addingMetadata: ["key": "value"]
+            mergingMetadata: ["key": "value"]
         ) { _ in
             logger.info("computing")
             return 100
@@ -142,7 +142,7 @@ struct TaskLocalLoggerTest {
 
         Logger.withCurrent(
             changingHandler: logger.handler,
-            addingMetadata: ["async": "true"]
+            mergingMetadata: ["async": "true"]
         ) { logger in
             logger.info("async test")
         }
@@ -160,7 +160,7 @@ struct TaskLocalLoggerTest {
 
         let result = Logger.withCurrent(
             changingHandler: logger.handler,
-            addingMetadata: ["async": "true"]
+            mergingMetadata: ["async": "true"]
         ) { logger in
             logger.info("async computing")
             return "async result"
@@ -211,7 +211,7 @@ struct TaskLocalLoggerTest {
         Logger.withCurrent(
             changingHandler: logger.handler,
             changingLogLevel: .error,
-            addingMetadata: ["combined": "test"]
+            mergingMetadata: ["combined": "test"]
         ) { logger in
             logger.info("should not appear")
             logger.error("should appear")
@@ -232,10 +232,10 @@ struct TaskLocalLoggerTest {
         let logger = Logger(label: "test", factory: { logging.make(label: $0) })
 
         Logger.withCurrent(changingHandler: logger.handler) { _ in
-            Logger.withCurrent(addingMetadata: ["level1": "first"]) { logger in
+            Logger.withCurrent(mergingMetadata: ["level1": "first"]) { logger in
                 logger.info("level 1")
 
-                Logger.withCurrent(addingMetadata: ["level2": "second"]) { logger in
+                Logger.withCurrent(mergingMetadata: ["level2": "second"]) { logger in
                     logger.info("level 2")
                 }
             }
@@ -258,8 +258,8 @@ struct TaskLocalLoggerTest {
         let logger = Logger(label: "test", factory: { logging.make(label: $0) })
 
         Logger.withCurrent(changingHandler: logger.handler) { _ in
-            Logger.withCurrent(addingMetadata: ["key": "original"]) { logger in
-                Logger.withCurrent(addingMetadata: ["key": "override"]) { logger in
+            Logger.withCurrent(mergingMetadata: ["key": "original"]) { logger in
+                Logger.withCurrent(mergingMetadata: ["key": "override"]) { logger in
                     logger.info("test")
                 }
             }
@@ -280,19 +280,19 @@ struct TaskLocalLoggerTest {
 
         await Logger.withCurrent(
             changingHandler: logger.handler,
-            addingMetadata: ["context": "parent"]
+            mergingMetadata: ["context": "parent"]
         ) { _ in
             await withTaskGroup(of: Void.self) { group in
                 // Task 1
                 group.addTask {
-                    Logger.withCurrent(addingMetadata: ["task": "1"]) { logger in
+                    Logger.withCurrent(mergingMetadata: ["task": "1"]) { logger in
                         logger.info("task 1 message")
                     }
                 }
 
                 // Task 2
                 group.addTask {
-                    Logger.withCurrent(addingMetadata: ["task": "2"]) { logger in
+                    Logger.withCurrent(mergingMetadata: ["task": "2"]) { logger in
                         logger.info("task 2 message")
                     }
                 }
@@ -330,7 +330,7 @@ struct TaskLocalLoggerTest {
         let logger = Logger(label: "test", factory: { logging.make(label: $0) })
 
         await Logger.withCurrent(changingHandler: logger.handler) { _ in
-            await Logger.withCurrent(addingMetadata: ["parent": "value"]) { logger in
+            await Logger.withCurrent(mergingMetadata: ["parent": "value"]) { logger in
                 logger.info("parent message")
 
                 // Create child task
@@ -360,12 +360,12 @@ struct TaskLocalLoggerTest {
         let logger = Logger(label: "test", factory: { logging.make(label: $0) })
 
         await Logger.withCurrent(changingHandler: logger.handler) { _ in
-            await Logger.withCurrent(addingMetadata: ["parent": "original"]) { logger in
+            await Logger.withCurrent(mergingMetadata: ["parent": "original"]) { logger in
                 logger.info("parent")
 
                 // Child overrides context
                 await Task {
-                    Logger.withCurrent(addingMetadata: ["parent": "overridden"]) { logger in
+                    Logger.withCurrent(mergingMetadata: ["parent": "overridden"]) { logger in
                         logger.info("child")
                     }
                 }.value
@@ -399,7 +399,7 @@ struct TaskLocalLoggerTest {
         let logger = Logger(label: "test", factory: { logging.make(label: $0) })
 
         try await Logger.withCurrent(changingHandler: logger.handler) { _ in
-            try await Logger.withCurrent(addingMetadata: ["request": "123"]) { logger in
+            try await Logger.withCurrent(mergingMetadata: ["request": "123"]) { logger in
                 logger.info("before await")
 
                 // Simulate async work
@@ -445,7 +445,7 @@ struct TaskLocalLoggerTest {
         }
 
         await Logger.withCurrent(changingHandler: logger.handler) { _ in
-            await Logger.withCurrent(addingMetadata: ["flow": "async"]) { logger in
+            await Logger.withCurrent(mergingMetadata: ["flow": "async"]) { logger in
                 await outerAsync()
             }
         }
@@ -589,7 +589,7 @@ struct TaskLocalLoggerTest {
         let logger = Logger(label: "test", factory: { logging.make(label: $0) })
 
         func processRequest(id: String) async {
-            await Logger.withCurrent(addingMetadata: ["request.id": "\(id)"]) { logger in
+            await Logger.withCurrent(mergingMetadata: ["request.id": "\(id)"]) { logger in
                 logger.info("Request received")
 
                 await authenticateUser(username: "alice")
@@ -599,7 +599,7 @@ struct TaskLocalLoggerTest {
         }
 
         func authenticateUser(username: String) async {
-            Logger.withCurrent(addingMetadata: ["user": "\(username)"]) { logger in
+            Logger.withCurrent(mergingMetadata: ["user": "\(username)"]) { logger in
                 logger.debug("Authenticating user")
             }
         }
@@ -640,7 +640,7 @@ struct TaskLocalLoggerTest {
 
         // Application sets up context
         Logger.withCurrent(changingHandler: logger.handler) { _ in
-            Logger.withCurrent(addingMetadata: ["request.id": "123"]) { logger in
+            Logger.withCurrent(mergingMetadata: ["request.id": "123"]) { logger in
                 let db = DatabaseClient()
                 db.query("SELECT * FROM users")
             }
