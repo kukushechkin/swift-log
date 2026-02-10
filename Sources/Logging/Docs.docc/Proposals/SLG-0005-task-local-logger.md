@@ -401,8 +401,6 @@ Task-local storage access has runtime overhead compared to explicit parameter pa
 - Use `Logger.withCurrent { }` in performance-sensitive code with many log calls.
 - Use explicit parameter passing in tight loops if profiling identifies task-local access as a bottleneck.
 
-In tight loops with many log calls, `Logger.current` overhead accumulates. `Logger.withCurrent { }` performs the lookup once and captures the logger, making repeated accesses more efficient.
-
 ### API stability
 
 Purely additive. No changes to existing `Logger` users or `LogHandler` implementations. Users must adopt the new task-local APIs to benefit. Existing ad-hoc loggers will keep losing parent metadata.
