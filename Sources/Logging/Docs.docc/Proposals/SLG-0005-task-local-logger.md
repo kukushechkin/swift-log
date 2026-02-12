@@ -151,7 +151,8 @@ Logger.withCurrent(mergingMetadata: ["request.id": "\(request.id)"]) { _ in
 }
 ```
 
-Child tasks inherit parent context automatically through Swift's structured concurrency.
+Child tasks inherit parent context automatically through Swift's structured concurrency. Context is task-local and multiple
+concurrent operations do not conflict over a global state.
 
 ### Detailed design
 
