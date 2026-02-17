@@ -5,9 +5,9 @@ Accumulate structured logging metadata across async call stacks using task-local
 ## Overview
 
 - Proposal: SLG-0005
-- Author(s): [Author Name](https://github.com/author)
+- Author(s): [Vladimir Kukushkin](https://github.com/kukushechkin)
 - Status: **Awaiting Review**
-- Issue: [apple/swift-log#XXX](https://github.com/apple/swift-log/issues/XXX)
+- Issue: [apple/swift-log#261](https://github.com/apple/swift-log/issues/261)
 - Implementation: [apple/swift-log#XXX](https://github.com/apple/swift-log/pull/XXX)
 
 ### Introduction
