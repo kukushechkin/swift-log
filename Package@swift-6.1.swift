@@ -6,6 +6,7 @@ let package = Package(
     name: "swift-log",
     products: [
         .library(name: "Logging", targets: ["Logging"]),
+        .library(name: "LoggingAttributes", targets: ["LoggingAttributes"]),
         .library(name: "InMemoryLogging", targets: ["InMemoryLogging"]),
     ],
     traits: [
@@ -32,12 +33,20 @@ let package = Package(
             dependencies: []
         ),
         .target(
+            name: "LoggingAttributes",
+            dependencies: ["Logging"]
+        ),
+        .target(
             name: "InMemoryLogging",
             dependencies: ["Logging"]
         ),
         .testTarget(
             name: "LoggingTests",
             dependencies: ["Logging"]
+        ),
+        .testTarget(
+            name: "LoggingAttributesTests",
+            dependencies: ["LoggingAttributes", "Logging"]
         ),
         .testTarget(
             name: "InMemoryLoggingTests",
