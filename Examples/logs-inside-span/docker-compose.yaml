@@ -1,0 +1,20 @@
+services:
+  web:
+    build: .
+    platform: linux/amd64
+    ports:
+      - "8080:8080"
+    environment:
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://grafana:4317
+    depends_on:
+      grafana:
+        condition: service_started
+
+  grafana:
+    image: grafana/otel-lgtm:latest
+    ports:
+      - "3000:3000"
+      - "4317:4317"
+
+# yaml-language-server: $schema=https://raw.githubusercontent.com/compose-spec/compose-spec/master/schema/compose-spec.json
