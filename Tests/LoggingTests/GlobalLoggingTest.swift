@@ -212,6 +212,34 @@ extension GlobalLoggerTest {
             metadata: ["provider": "42", "one-off": "42"]
         )
     }
+
+    /// `taskLocalFactory` takes precedence over `LoggingSystem.factory` inside a
+    /// `withLoggerFactory(_:_:)` scope. Outside the scope, `Logger(label:)` falls back
+    /// to the bootstrapped factory.
+    @Test func taskLocalFactoryOverridesBootstrappedFactory() {
+        let bootstrapped = TestLogging()
+        let scoped = TestLogging()
+        LoggingSystem.bootstrapInternal(bootstrapped.make)
+
+        // Outside the scope: bootstrap wins.
+        Logger(label: "app").info("outside")
+
+        // Inside the scope: task-local factory wins.
+        withLoggerFactory({ label, _ in scoped.make(label: label) }) {
+            Logger(label: "app").info("inside")
+        }
+
+        // After the scope: bootstrap wins again.
+        Logger(label: "app").info("after")
+
+        bootstrapped.history.assertExist(level: .info, message: "outside")
+        bootstrapped.history.assertExist(level: .info, message: "after")
+        bootstrapped.history.assertNotExist(level: .info, message: "inside")
+
+        scoped.history.assertExist(level: .info, message: "inside")
+        scoped.history.assertNotExist(level: .info, message: "outside")
+        scoped.history.assertNotExist(level: .info, message: "after")
+    }
 }
 
 private struct Struct1 {

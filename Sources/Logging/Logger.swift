@@ -1201,13 +1201,16 @@ extension Logger {
         case critical
     }
 
-    /// Construct a logger with the label you provide to identify the creator of the logger.
+    /// Construct a `Logger` that identifies its creator with a label.
     ///
-    /// The `label` should identify the creator of the `Logger`.
-    /// This can be an application, a sub-system, or a datatype.
+    /// The `label` should identify the creator of the `Logger`. This can be an application,
+    /// a sub-system, or a datatype.
     ///
-    /// - parameters:
-    ///     - label: An identifier for the creator of a `Logger`.
+    /// The handler is produced by ``LoggingSystem/factory`` — which returns the
+    /// task-local factory bound by ``withLoggerFactory(_:_:)`` if one is in effect, or
+    /// the bootstrapped factory otherwise.
+    ///
+    /// - Parameter label: An identifier for the creator of a `Logger`.
     public init(label: String) {
         self.init(label: label, LoggingSystem.factory(label, LoggingSystem.metadataProvider))
     }

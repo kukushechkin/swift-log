@@ -95,8 +95,16 @@ public enum LoggingSystem: Sendable {
         self._factory.replace(factory, validate: false)
     }
 
-    internal static var factory: @Sendable (String, Logger.MetadataProvider?) -> any LogHandler {
-        self._factory.underlying
+    /// The handler factory currently in effect for this task — the value bound by the
+    /// nearest enclosing ``withLoggerFactory(_:_:)`` scope, or the bootstrapped factory
+    /// when no scope is active.
+    public static var factory: @Sendable (String, Logger.MetadataProvider?) -> any LogHandler {
+        if #available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *) {
+            if let scoped = Logger.taskLocalFactory.wrappedValue {
+                return scoped
+            }
+        }
+        return self._factory.underlying
     }
 
     /// System wide ``Logger/MetadataProvider`` that was configured during the logging system's `bootstrap`.

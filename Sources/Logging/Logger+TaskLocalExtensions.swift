@@ -37,7 +37,7 @@ extension TaskLocal where Value == Logger {
         }
     }
 
-    /// Async variant of ``withMetadata(merging:_:)-(_:_:)``. See that function for semantics.
+    /// Async variant of ``withMetadata(merging:_:)``. See that function for semantics.
     public func withMetadata<Result>(
         merging metadata: Logger.Metadata,
         _ operation: nonisolated(nonsending) () async throws -> Result
