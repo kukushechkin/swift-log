@@ -49,7 +49,9 @@ public func makeBenchmark(
                 ),
             ]
         )
-    ) { _ in
+    ) { benchmark in
+        benchmark.startMeasurement()
         body(logger)
+        benchmark.stopMeasurement()
     }
 }

@@ -24,4 +24,24 @@ public let benchmarks: @Sendable () -> Void = {
     makeBenchmark(loggerLevel: .error, logLevel: .debug, "_generic") { logger in
         logger.log(level: .debug, "hello, benchmarking world")
     }
+
+    // MARK: - Task-local logger benchmarks
+
+    makeBenchmark(loggerLevel: .error, logLevel: .error, "_current_read") { _ in
+        blackHole(Logger.current.wrappedValue)
+    }
+
+    makeBenchmark(loggerLevel: .error, logLevel: .error, "_current_read_inside_metadata_scope") { _ in
+        Logger.current.withMetadata(merging: ["key": "value"]) {
+            blackHole(Logger.current.wrappedValue)
+        }
+    }
+
+    makeBenchmark(loggerLevel: .error, logLevel: .error, "_current_withMetadata_scope_entry") { _ in
+        Logger.current.withMetadata(merging: ["key": "value"]) {}
+    }
+
+    makeBenchmark(loggerLevel: .error, logLevel: .error, "_withLoggerFactory_scope_entry") { logger in
+        withLoggerFactory({ _, _ in logger.handler }) {}
+    }
 }
