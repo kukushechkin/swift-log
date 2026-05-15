@@ -77,24 +77,75 @@ final class BackgroundJobProcessor {
 }
 ```
 
-#### Avoid: Libraries creating their own loggers
+#### Alternative: Task-local propagation for intra-module code
 
-Libraries might create their own loggers; however, this leads to two problems.
-First, users of the library can't inject their own loggers which means they have
-no control in customizing the log level or log handler. Secondly, it breaks the
-metadata propagation since users can't pass in a logger with already attached
-metadata.
+In narrow cases — library code that logs from many internal helper functions, where threading a `Logger` through
+every internal signature adds noise without new information — the task-local mechanisms from
+<doc:004-StructuredLoggerPropagation> offer an alternative that does not require a parameter on every call. Prefer
+parameter-passing unless the intra-module noise is a real cost:
+
+- A per-module **`TaskLocal<Logger>`** (or the default ``Logger/current``) reads as a Logger via SLG-0006's
+  extension forwarders. Internal helper functions read it without accepting a `logger:` parameter, and metadata
+  accumulates via `withMetadata(merging:_:)`.
+- **``Logger/init(label:)``** inside a caller's `withLoggerFactory(_:_:)` scope picks up the caller's chosen
+  backend while keeping the library's own label. It does not merge any task-local metadata — a freshly-constructed
+  logger is isolated from the caller's per-request metadata.
 
 ```swift
-// ❌ Bad: Library creates its own logger
-final class MyLibrary {
-    private let logger = Logger(label: "MyLibrary")  // Loses all context
+// Library declares its own identity; no logger: parameter required.
+public struct MyLibrary {
+    public func operation() {
+        Logger(label: "MyLibrary").info("Doing work")
+    }
 }
 
-// ✅ Good: Library accepts logger from caller
-final class MyLibrary {
-    func operation(logger: Logger) {
-        // Maintains caller's context and metadata
+// Application scopes the backend once.
+try await withLoggerFactory(StreamLogHandler.standardError) {
+    try await Logger.current.withMetadata(merging: ["request.id": "r1"]) {
+        MyLibrary().operation()
+        // Logs with label "MyLibrary", handler from StreamLogHandler.standardError,
+        // no request.id — the library's logger is its own.
     }
 }
 ```
+
+If the caller wants `request.id` to reach the library's log lines too, the caller wraps the factory to bake the
+accumulated metadata into each handler at construction time; see <doc:004-StructuredLoggerPropagation> for the
+factory-wrap pattern.
+
+This is a valid alternative to parameter-passing when a library prefers to own its logging identity and the
+caller uses `withLoggerFactory(_:_:)` to scope the backend. It is not a replacement — parameter-passing remains
+the recommended pattern when the caller already has a logger and the library only needs one.
+
+Consult <doc:004-StructuredLoggerPropagation> for the cached-vs-per-call trade-off that applies when a library
+caches a ``Logger`` as a property: a cached logger captures the factory active at *construction*, so caching and
+per-scope backend swaps are in tension.
+
+#### Avoid: `static let` or file-scope `private let` cached loggers under task-local propagation
+
+`Logger`s cached as `static let` on a type or as `private let` at file scope are lazily initialized by Swift
+exactly once per process, on the first access — *inside whichever task-local scope that first access happens to
+be in*. The factory captured at that moment persists for the life of the process, so the library's log lines
+route through whichever backend happened to be in scope when the first caller touched the cached logger.
+
+If your library uses this pattern and your callers use `withLoggerFactory(_:_:)`, prefer an instance-level
+`private let logger` constructed at a predictable time, a computed `static var logger: Logger { Logger(label: "…") }`,
+or per-call construction. See <doc:004-StructuredLoggerPropagation> for the full matrix.
+
+```swift
+// Library accepts logger from caller — always correct, most explicit.
+final class MyLibrary {
+    func operation(logger: Logger) {
+        // Maintains caller's context and metadata.
+    }
+}
+
+// Library constructs its own logger per call — picks up the caller's current factory.
+public struct MyLibrary {
+    public func operation() {
+        let logger = Logger(label: "MyLibrary")  // Inherits scope factory, own label, no scope metadata.
+        logger.info("Doing work")
+    }
+}
+```
+
