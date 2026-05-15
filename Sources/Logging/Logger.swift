@@ -34,7 +34,7 @@ public struct Logger {
         @usableFromInline
         var handler: any LogHandler
 
-        @inlinable
+        @usableFromInline
         init(label: String, handler: any LogHandler) {
             self.label = label
             self.handler = handler
@@ -327,6 +327,17 @@ extension Logger {
         set {
             self.handler[metadataKey: metadataKey] = newValue
         }
+    }
+
+    /// Returns a copy of this logger with `metadata` merged into its existing metadata.
+    /// Keys in `metadata` override existing keys with the same name.
+    @inlinable
+    public func withMetadata(merging metadata: Logger.Metadata) -> Logger {
+        var copy = self
+        for (key, value) in metadata {
+            copy[metadataKey: key] = value
+        }
+        return copy
     }
 
     /// Get or set the log level configured for this `Logger`.

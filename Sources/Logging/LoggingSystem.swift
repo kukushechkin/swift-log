@@ -95,10 +95,8 @@ public enum LoggingSystem: Sendable {
         self._factory.replace(factory, validate: false)
     }
 
-    internal static var factory: (String, Logger.MetadataProvider?) -> any LogHandler {
-        { label, metadataProvider in
-            self._factory.underlying(label, metadataProvider)
-        }
+    internal static var factory: @Sendable (String, Logger.MetadataProvider?) -> any LogHandler {
+        self._factory.underlying
     }
 
     /// System wide ``Logger/MetadataProvider`` that was configured during the logging system's `bootstrap`.
