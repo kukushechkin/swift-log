@@ -57,10 +57,15 @@ extension Logger {
             @usableFromInline
             internal var value: Int64
 
+            @usableFromInline
+            internal init(_key: ObjectIdentifier, _value: Int64) {
+                self.key = _key
+                self.value = _value
+            }
+
             @inlinable
             internal init(key: ObjectIdentifier, value: Int64) {
-                self.key = key
-                self.value = value
+                self.init(_key: key, _value: value)
             }
         }
 
@@ -70,9 +75,17 @@ extension Logger {
         @usableFromInline
         internal var _overflow: [Entry]?
 
+        @usableFromInline
+        internal init(_inline: Entry?, _overflow: [Entry]?) {
+            self._inline = _inline
+            self._overflow = _overflow
+        }
+
         /// Create empty metadata value attributes.
         @inlinable
-        public init() {}
+        public init() {
+            self.init(_inline: nil, _overflow: nil)
+        }
 
         /// Get or set a custom attribute by its type.
         ///
@@ -340,8 +353,12 @@ extension Logger.MetadataValue: ExpressibleByStringInterpolation {
         @usableFromInline
         internal var hasAttributes: Bool = false
 
+        @usableFromInline
+        internal init() {}
+
         @inlinable
         public init(literalCapacity: Int, interpolationCount: Int) {
+            self.init()
             self.output.reserveCapacity(literalCapacity + interpolationCount * 2)
         }
 

@@ -34,10 +34,15 @@ public struct Logger {
         @usableFromInline
         var handler: any LogHandler
 
+        @usableFromInline
+        internal init(_label: String, _handler: any LogHandler) {
+            self.label = _label
+            self.handler = _handler
+        }
+
         @inlinable
-        init(label: String, handler: any LogHandler) {
-            self.label = label
-            self.handler = handler
+        convenience init(label: String, handler: any LogHandler) {
+            self.init(_label: label, _handler: handler)
         }
 
         @inlinable
