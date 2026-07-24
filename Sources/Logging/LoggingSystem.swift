@@ -26,11 +26,11 @@
 /// The default (``StreamLogHandler``) is intended to be a convenience.
 /// For production applications, implement the ``LogHandler`` protocol directly, or use a community-maintained backend.
 public enum LoggingSystem: Sendable {
-    private static let _factory = FactoryBox(
-        { label, _ in StreamLogHandler.standardError(label: label) },
+    internal static let _factory = FactoryBox(
+        defaultLogHandlerFactory,
         violationErrorMesage: "logging system can only be initialized once per process."
     )
-    private static let _metadataProviderFactory = MetadataProviderBox(
+    internal static let _metadataProviderFactory = MetadataProviderBox(
         nil,
         violationErrorMesage: "logging system can only be initialized once per process."
     )
@@ -39,72 +39,10 @@ public enum LoggingSystem: Sendable {
     private static let _warnOnceBox: WarnOnceBox = WarnOnceBox()
     #endif
 
-    /// A one-time configuration function that globally selects the implementation for your desired logging backend.
-    ///
-    /// >  Warning:
-    /// > `bootstrap` can be called at maximum once in any given program, calling it more than once will
-    /// > lead to undefined behavior, most likely a crash.
-    ///
-    /// - parameters:
-    ///     - factory: A closure that provides a ``Logger`` label identifier and produces an instance of the ``LogHandler``.
-    @preconcurrency
-    public static func bootstrap(_ factory: @escaping @Sendable (String) -> any LogHandler) {
-        self._factory.replace(
-            { label, _ in
-                factory(label)
-            },
-            validate: true
-        )
-    }
-
-    /// A one-time configuration function that globally selects the implementation for your desired logging backend.
-    ///
-    /// >  Warning:
-    /// > `bootstrap` can be called at maximum once in any given program, calling it more than once will
-    /// > lead to undefined behavior, most likely a crash.
-    ///
-    /// - parameters:
-    ///     - metadataProvider: The `MetadataProvider` used to inject runtime-generated metadata from the execution context.
-    ///     - factory: A closure that provides a ``Logger`` label identifier and produces an instance of the ``LogHandler``.
-    @preconcurrency
-    public static func bootstrap(
-        _ factory: @escaping @Sendable (String, Logger.MetadataProvider?) -> any LogHandler,
-        metadataProvider: Logger.MetadataProvider?
-    ) {
-        self._metadataProviderFactory.replace(metadataProvider, validate: true)
-        self._factory.replace(factory, validate: true)
-    }
-
-    // for our testing we want to allow multiple bootstrapping
-    internal static func bootstrapInternal(_ factory: @escaping @Sendable (String) -> any LogHandler) {
-        self._metadataProviderFactory.replace(nil, validate: false)
-        self._factory.replace(
-            { label, _ in
-                factory(label)
-            },
-            validate: false
-        )
-    }
-
-    // for our testing we want to allow multiple bootstrapping
-    internal static func bootstrapInternal(
-        _ factory: @escaping @Sendable (String, Logger.MetadataProvider?) -> any LogHandler,
-        metadataProvider: Logger.MetadataProvider?
-    ) {
-        self._metadataProviderFactory.replace(metadataProvider, validate: false)
-        self._factory.replace(factory, validate: false)
-    }
-
     internal static var factory: (String, Logger.MetadataProvider?) -> any LogHandler {
         { label, metadataProvider in
             self._factory.underlying(label, metadataProvider)
         }
-    }
-
-    /// `true` once a user has explicitly called ``bootstrap(_:)`` or the metadata-provider
-    /// overload; `false` while the system is still using the default `StreamLogHandler`.
-    internal static var isBootstrapped: Bool {
-        self._factory.isInitialized
     }
 
     /// System wide ``Logger/MetadataProvider`` that was configured during the logging system's `bootstrap`.
@@ -155,7 +93,7 @@ public enum LoggingSystem: Sendable {
 
     /// Protects an object by applying the constraints that it can only be accessed through a Reader-Writer lock
     /// and can only be updated once from the initial value given.
-    private struct ReplaceOnceBox<BoxedType: Sendable> {
+    internal struct ReplaceOnceBox<BoxedType: Sendable> {
         private struct ReplaceOnce: Sendable {
             private(set) var initialized = false
             private var _underlying: BoxedType
@@ -201,11 +139,11 @@ public enum LoggingSystem: Sendable {
         }
     }
 
-    private typealias FactoryBox = ReplaceOnceBox<
+    internal typealias FactoryBox = ReplaceOnceBox<
         @Sendable (_ label: String, _ provider: Logger.MetadataProvider?) -> any LogHandler
     >
 
-    private typealias MetadataProviderBox = ReplaceOnceBox<Logger.MetadataProvider?>
+    internal typealias MetadataProviderBox = ReplaceOnceBox<Logger.MetadataProvider?>
 }
 
 // MARK: - Debug only warnings
