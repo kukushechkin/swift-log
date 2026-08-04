@@ -196,7 +196,7 @@ internal final class ReadWriteLock: @unchecked Sendable {
     #endif
 
     /// Create a new lock.
-    public init() {
+    init() {
         #if os(Windows)
         InitializeSRWLock(self.rwlock)
         #elseif (compiler(<6.1) && !os(WASI)) || (compiler(>=6.1) && _runtime(_multithreaded))
