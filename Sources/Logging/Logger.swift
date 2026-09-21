@@ -1325,18 +1325,30 @@ extension Logger.MetadataValue: Equatable {
     ///   - rhs: The second metadata value.
     /// - Returns: Returns `true` if the metadata values are equivalent; otherwise `false`.
     public static func == (lhs: Logger.Metadata.Value, rhs: Logger.Metadata.Value) -> Bool {
-        switch (lhs, rhs) {
-        case (.string(let lhs), .string(let rhs)):
-            return lhs == rhs
-        case (.stringConvertible(let lhs), .stringConvertible(let rhs)):
-            return lhs.description == rhs.description
-        case (.array(let lhs), .array(let rhs)):
-            return lhs == rhs
-        case (.dictionary(let lhs), .dictionary(let rhs)):
-            return lhs == rhs
-        default:
-            return false
+        var pending: [(Logger.Metadata.Value, Logger.Metadata.Value)] = [(lhs, rhs)]
+        while let (lhs, rhs) = pending.popLast() {
+            switch (lhs, rhs) {
+            case (.string(let lhs), .string(let rhs)):
+                guard lhs == rhs else { return false }
+            case (.stringConvertible(let lhs), .stringConvertible(let rhs)):
+                guard lhs.description == rhs.description else { return false }
+            case (.array(let lhs), .array(let rhs)):
+                guard lhs.count == rhs.count else { return false }
+                for (lValue, rValue) in zip(lhs, rhs) {
+                    pending.append((lValue, rValue))
+                }
+            case (.dictionary(let lhs), .dictionary(let rhs)):
+                guard lhs.count == rhs.count else { return false }
+                for (key, lValue) in lhs {
+                    guard let rValue = rhs[key] else { return false }
+                    pending.append((lValue, rValue))
+                }
+            default:
+                return false
+            }
         }
+
+        return true
     }
 }
 
@@ -1414,15 +1426,67 @@ extension Logger.MetadataValue: CustomStringConvertible {
     /// A string representation of the metadata value.
     public var description: String {
         switch self {
-        case .dictionary(let dict):
-            return dict.mapValues { $0.description }.description
-        case .array(let list):
-            return list.map { $0.description }.description
         case .string(let str):
             return str
         case .stringConvertible(let repr):
             return repr.description
+        case .array, .dictionary:
+            break
         }
+
+        enum WorkItem {
+            case value(Logger.MetadataValue)
+            case finishArray(count: Int)
+            case finishDictionary(keys: [String])
+        }
+
+        func quotedAsCollectionElement(_ value: String) -> String {
+            value.debugDescription
+        }
+
+        var work: [WorkItem] = [.value(self)]  // Not yet rendered items
+        var partials: [String] = []            // Already rendered items
+
+        while let item = work.popLast() {
+            switch item {
+            case .value(.string(let str)):
+                // Accumulate rendered leaf items in `partials`
+                partials.append(quotedAsCollectionElement(str))
+            case .value(.stringConvertible(let repr)):
+                // Accumulate rendered leaf items in `partials`
+                partials.append(quotedAsCollectionElement(repr.description))
+            case .value(.array(let list)):
+                // Mark container end
+                work.append(.finishArray(count: list.count))
+                for value in list.reversed() {
+                    work.append(.value(value))
+                }
+            case .value(.dictionary(let dict)):
+                let keys = Array(dict.keys)
+                // Mark container end
+                work.append(.finishDictionary(keys: keys))
+                for key in keys.reversed() {
+                    work.append(.value(dict[key]!))
+                }
+            case .finishArray(let count):
+                let items = Array(partials.suffix(count))
+                partials.removeLast(count)
+                // Combine already rendered children to a container and treat it as a child of a parent container
+                partials.append("[\(items.joined(separator: ", "))]")
+            case .finishDictionary(let keys):
+                guard !keys.isEmpty else {
+                    partials.append("[:]")
+                    continue
+                }
+                let values = Array(partials.suffix(keys.count))
+                partials.removeLast(keys.count)
+                let entries = zip(keys, values).map { key, value in "\(quotedAsCollectionElement(key)): \(value)" }
+                // Combine already rendered children to a container and treat it as a child of a parent container
+                partials.append("[\(entries.joined(separator: ", "))]")
+            }
+        }
+
+        return partials[0]
     }
 }
 
