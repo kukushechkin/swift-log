@@ -21,10 +21,13 @@ struct MetadataValueTest {
     func descriptionRendering() {
         #expect(Logger.MetadataValue.array([]).description == "[]")
         #expect(Logger.MetadataValue.array(["a", "b"]).description == ["a", "b"].description)
-        
+
         #expect(Logger.MetadataValue.dictionary([:]).description == "[:]")
         #expect(Logger.MetadataValue.dictionary(["k": "v"]).description == ["k": "v"].description)
-        #expect(Logger.MetadataValue.dictionary(["outer": ["inner": "leaf"]]).description == "[\"outer\": [\"inner\": \"leaf\"]]")
+        #expect(
+            Logger.MetadataValue.dictionary(["outer": ["inner": "leaf"]]).description
+                == "[\"outer\": [\"inner\": \"leaf\"]]"
+        )
     }
 
     @Test

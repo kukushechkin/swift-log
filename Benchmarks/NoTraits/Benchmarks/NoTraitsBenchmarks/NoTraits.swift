@@ -86,7 +86,7 @@ public let benchmarks: @Sendable () -> Void = {
             ]
         )
     }
-    
+
     // MARK: - metadata serialization performance
 
     func nestedArrayMetadataValue(depth: Int) -> Logger.MetadataValue {

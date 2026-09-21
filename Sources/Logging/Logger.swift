@@ -1445,7 +1445,7 @@ extension Logger.MetadataValue: CustomStringConvertible {
         }
 
         var work: [WorkItem] = [.value(self)]  // Not yet rendered items
-        var partials: [String] = []            // Already rendered items
+        var partials: [String] = []  // Already rendered items
 
         while let item = work.popLast() {
             switch item {
