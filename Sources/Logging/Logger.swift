@@ -1430,63 +1430,26 @@ extension Logger.MetadataValue: CustomStringConvertible {
             return str
         case .stringConvertible(let repr):
             return repr.description
+        case .array(let list):
+            let items = list.map { $0.quotedAsCollectionElement }
+            return "[\(items.joined(separator: ", "))]"
+        case .dictionary(let dict):
+            guard !dict.isEmpty else { return "[:]" }
+            let entries = dict.map { key, value in "\(key.debugDescription): \(value.quotedAsCollectionElement)" }
+            return "[\(entries.joined(separator: ", "))]"
+        }
+    }
+
+    /// Only qute the leaf
+    private var quotedAsCollectionElement: String {
+        switch self {
+        case .string(let str):
+            return str.debugDescription
+        case .stringConvertible(let repr):
+            return repr.description.debugDescription
         case .array, .dictionary:
-            break
+            return self.description
         }
-
-        enum WorkItem {
-            case value(Logger.MetadataValue)
-            case finishArray(count: Int)
-            case finishDictionary(keys: [String])
-        }
-
-        func quotedAsCollectionElement(_ value: String) -> String {
-            value.debugDescription
-        }
-
-        var work: [WorkItem] = [.value(self)]  // Not yet rendered items
-        var partials: [String] = []  // Already rendered items
-
-        while let item = work.popLast() {
-            switch item {
-            case .value(.string(let str)):
-                // Accumulate rendered leaf items in `partials`
-                partials.append(quotedAsCollectionElement(str))
-            case .value(.stringConvertible(let repr)):
-                // Accumulate rendered leaf items in `partials`
-                partials.append(quotedAsCollectionElement(repr.description))
-            case .value(.array(let list)):
-                // Mark container end
-                work.append(.finishArray(count: list.count))
-                for value in list.reversed() {
-                    work.append(.value(value))
-                }
-            case .value(.dictionary(let dict)):
-                let keys = Array(dict.keys)
-                // Mark container end
-                work.append(.finishDictionary(keys: keys))
-                for key in keys.reversed() {
-                    work.append(.value(dict[key]!))
-                }
-            case .finishArray(let count):
-                let items = Array(partials.suffix(count))
-                partials.removeLast(count)
-                // Combine already rendered children to a container and treat it as a child of a parent container
-                partials.append("[\(items.joined(separator: ", "))]")
-            case .finishDictionary(let keys):
-                guard !keys.isEmpty else {
-                    partials.append("[:]")
-                    continue
-                }
-                let values = Array(partials.suffix(keys.count))
-                partials.removeLast(keys.count)
-                let entries = zip(keys, values).map { key, value in "\(quotedAsCollectionElement(key)): \(value)" }
-                // Combine already rendered children to a container and treat it as a child of a parent container
-                partials.append("[\(entries.joined(separator: ", "))]")
-            }
-        }
-
-        return partials[0]
     }
 }
 
