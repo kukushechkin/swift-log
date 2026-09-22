@@ -1325,30 +1325,18 @@ extension Logger.MetadataValue: Equatable {
     ///   - rhs: The second metadata value.
     /// - Returns: Returns `true` if the metadata values are equivalent; otherwise `false`.
     public static func == (lhs: Logger.Metadata.Value, rhs: Logger.Metadata.Value) -> Bool {
-        var pending: [(Logger.Metadata.Value, Logger.Metadata.Value)] = [(lhs, rhs)]
-        while let (lhs, rhs) = pending.popLast() {
-            switch (lhs, rhs) {
-            case (.string(let lhs), .string(let rhs)):
-                guard lhs == rhs else { return false }
-            case (.stringConvertible(let lhs), .stringConvertible(let rhs)):
-                guard lhs.description == rhs.description else { return false }
-            case (.array(let lhs), .array(let rhs)):
-                guard lhs.count == rhs.count else { return false }
-                for (lValue, rValue) in zip(lhs, rhs) {
-                    pending.append((lValue, rValue))
-                }
-            case (.dictionary(let lhs), .dictionary(let rhs)):
-                guard lhs.count == rhs.count else { return false }
-                for (key, lValue) in lhs {
-                    guard let rValue = rhs[key] else { return false }
-                    pending.append((lValue, rValue))
-                }
-            default:
-                return false
-            }
+        switch (lhs, rhs) {
+        case (.string(let lhs), .string(let rhs)):
+            return lhs == rhs
+        case (.stringConvertible(let lhs), .stringConvertible(let rhs)):
+            return lhs.description == rhs.description
+        case (.array(let lhs), .array(let rhs)):
+            return lhs == rhs
+        case (.dictionary(let lhs), .dictionary(let rhs)):
+            return lhs == rhs
+        default:
+            return false
         }
-
-        return true
     }
 }
 
